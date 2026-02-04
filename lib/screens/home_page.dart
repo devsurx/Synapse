@@ -4,14 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:study_coach_app/main.dart';
+import 'package:intl/intl.dart';
 import 'dart:ui';
 
 import '../services/pdf_service.dart';
 import 'flashcard_screen.dart';
 import 'Eli5LabScreen.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'onboarding_screen.dart';
+import '../main.dart'; // Ensure this points to where your LoginScreen is defined
 
 // --- 1. LEVEL UP OVERLAY ---
 class LevelUpOverlay extends StatelessWidget {
@@ -119,10 +119,41 @@ class _HomePageState extends State<HomePage> {
   int _gardenLevel = 1;
   double _gardenExp = 0.0;
 
+  // Time & Greeting State
+  late Timer _timeTimer;
+  String _currentTime = "";
+  String _greeting = "";
+
   @override
   void initState() {
     super.initState();
     _loadAllData();
+    _updateTime();
+    // Update clock every minute
+    _timeTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      _updateTime();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timeTimer.cancel();
+    super.dispose();
+  }
+
+  void _updateTime() {
+    final now = DateTime.now();
+    final hour = now.hour;
+    setState(() {
+      _currentTime = DateFormat('h:mm a').format(now);
+      if (hour < 12) {
+        _greeting = "GOOD MORNING";
+      } else if (hour < 17) {
+        _greeting = "GOOD AFTERNOON";
+      } else {
+        _greeting = "GOOD EVENING";
+      }
+    });
   }
 
   Future<void> _loadAllData() async {
@@ -221,27 +252,59 @@ class _HomePageState extends State<HomePage> {
   Widget _buildTopBar() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "GOOD MORNING",
-              style: TextStyle(
-                color: Colors.white24,
-                fontSize: 10,
-                letterSpacing: 2,
-              ),
+            Row(
+              children: [
+                Text(
+                  _greeting,
+                  style: const TextStyle(
+                    color: Color(0xFF8DAA91),
+                    fontSize: 10,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  "•  $_currentTime",
+                  style: const TextStyle(
+                    color: Colors.white24,
+                    fontSize: 10,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 4),
             Text(
               widget.userName,
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
           ],
         ),
-        IconButton(
-          icon: const Icon(Icons.logout_rounded, color: Colors.white24),
-          onPressed: _showLogoutDialog,
+        GestureDetector(
+          onTap: _showLogoutDialog,
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: const Icon(
+              Icons.logout_rounded,
+              color: Colors.white24,
+              size: 22,
+            ),
+          ),
         ),
       ],
     );
@@ -264,6 +327,7 @@ class _HomePageState extends State<HomePage> {
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1,
+                    color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -307,7 +371,11 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 12),
           Text(
             _fileName ?? "Upload PDF to Study",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Colors.white,
+            ),
           ),
           const Text(
             "AI Analysis for Quizzes & Flashcards",
@@ -363,7 +431,11 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(width: 8),
           Text(
             title,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
         ],
       ),
@@ -372,6 +444,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildTodoInput() {
     return TextField(
+      style: const TextStyle(color: Colors.white),
       onSubmitted: (v) {
         if (v.isNotEmpty) {
           setState(() => _todos.add(v));
@@ -380,6 +453,7 @@ class _HomePageState extends State<HomePage> {
       },
       decoration: InputDecoration(
         hintText: "Add mission...",
+        hintStyle: const TextStyle(color: Colors.white24),
         prefixIcon: const Icon(Icons.add, color: Color(0xFF8DAA91)),
         filled: true,
         fillColor: Colors.white.withOpacity(0.05),
@@ -400,7 +474,7 @@ class _HomePageState extends State<HomePage> {
         key: Key(_todos[i] + i.toString()),
         onDismissed: (_) {
           setState(() => _todos.removeAt(i));
-          _addExp(0.2); // Task completion reward
+          _addExp(0.2);
           _saveTodos();
         },
         child: Container(
@@ -454,7 +528,7 @@ class _HomePageState extends State<HomePage> {
         _fileName = result.files.single.name;
         _isExtracting = false;
       });
-      _addExp(0.5); // File upload reward
+      _addExp(0.5);
     }
   }
 
