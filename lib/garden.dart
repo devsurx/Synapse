@@ -51,16 +51,31 @@ class _GardenScreenState extends State<GardenScreen>
   // --- AUDIO SETUP ---
   void _setupAudio() async {
     await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    await _audioPlayer.setSource(
-      AssetSource('assets/audio/zen.mp3'),
-    ); // Uncomment when asset is ready
+    // Note: Ensure your asset is added to pubspec.yaml
+    // await _audioPlayer.setSource(AssetSource('audio/zen.mp3'));
   }
 
-  // --- DATA LOGIC ---
+  // --- DATA LOGIC: LOAD & PERSIST ---
   Future<void> _loadGardenData() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // 1. Load basic stats
     int mins = prefs.getInt('focus_minutes') ?? 0;
     int streak = prefs.getInt('streak') ?? 0;
+    String? lastDateStr = prefs.getString('last_focus_date');
+
+    // 2. Calculate Streak Logic
+    if (lastDateStr != null) {
+      DateTime lastDate = DateTime.parse(lastDateStr);
+      DateTime today = DateTime.now();
+      int difference = today.difference(lastDate).inDays;
+
+      if (difference > 1) {
+        // User missed more than a day, reset streak
+        streak = 0;
+        await prefs.setInt('streak', 0);
+      }
+    }
 
     setState(() {
       _totalFocusMinutes = mins;
@@ -91,15 +106,38 @@ class _GardenScreenState extends State<GardenScreen>
   Future<void> _completeSession() async {
     _timer?.cancel();
     final prefs = await SharedPreferences.getInstance();
+
+    // 1. Calculate new values
     int newMins = _totalFocusMinutes + 25;
     int oldLevel = _currentLevel;
     int newLevel = (newMins ~/ 25) + 1;
 
+    // 2. Handle Streak logic on completion
+    String? lastDateStr = prefs.getString('last_focus_date');
+    int updatedStreak = _streak;
+    DateTime today = DateTime.now();
+
+    if (lastDateStr == null) {
+      updatedStreak = 1;
+    } else {
+      DateTime lastDate = DateTime.parse(lastDateStr);
+      // If last focus was yesterday, increment streak. If today, keep same.
+      if (today.difference(lastDate).inDays == 1) {
+        updatedStreak++;
+      } else if (today.difference(lastDate).inDays > 1) {
+        updatedStreak = 1;
+      }
+    }
+
+    // 3. Save to disk
     await prefs.setInt('focus_minutes', newMins);
+    await prefs.setInt('streak', updatedStreak);
+    await prefs.setString('last_focus_date', today.toIso8601String());
 
     setState(() {
       _totalFocusMinutes = newMins;
       _currentLevel = newLevel;
+      _streak = updatedStreak;
       _isTimerRunning = false;
       _secondsRemaining = 25 * 60;
     });
@@ -113,12 +151,12 @@ class _GardenScreenState extends State<GardenScreen>
   List<Color> _getThemeGradient() {
     int hour = DateTime.now().hour;
     if (hour >= 5 && hour < 11)
-      return [const Color(0xFF142B1A), const Color(0xFF0F0F0F)]; // Morning
+      return [const Color(0xFF142B1A), const Color(0xFF0F0F0F)];
     if (hour >= 11 && hour < 17)
-      return [const Color(0xFF1B2E21), const Color(0xFF0F0F0F)]; // Day
+      return [const Color(0xFF1B2E21), const Color(0xFF0F0F0F)];
     if (hour >= 17 && hour < 20)
-      return [const Color(0xFF2E241B), const Color(0xFF0F0F0F)]; // Sunset
-    return [const Color(0xFF0A141D), const Color(0xFF050505)]; // Night
+      return [const Color(0xFF2E241B), const Color(0xFF0F0F0F)];
+    return [const Color(0xFF0A141D), const Color(0xFF050505)];
   }
 
   String _getRank() {
@@ -140,7 +178,11 @@ class _GardenScreenState extends State<GardenScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading)
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF8DAA91)),
+        ),
+      );
 
     return Scaffold(
       body: AnimatedContainer(
@@ -176,7 +218,7 @@ class _GardenScreenState extends State<GardenScreen>
                   _buildStartButton(),
                   const SizedBox(height: 60),
                   _buildStatsCard(),
-                  const SizedBox(height: 140), // Spacing for Navbar
+                  const SizedBox(height: 140),
                 ],
               ),
             ),
@@ -192,7 +234,6 @@ class _GardenScreenState extends State<GardenScreen>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Glowing Aura
           AnimatedBuilder(
             animation: _animController,
             builder: (context, _) => Container(
@@ -212,12 +253,10 @@ class _GardenScreenState extends State<GardenScreen>
               ),
             ),
           ),
-          // Floating Fireflies (Increases with level)
           ...List.generate(
             math.min(5 + _currentLevel, 15),
             (i) => _buildFirefly(i),
           ),
-          // Breathing Plant
           ScaleTransition(
             scale: Tween(begin: 1.0, end: 1.08).animate(
               CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
@@ -304,7 +343,7 @@ class _GardenScreenState extends State<GardenScreen>
                   Text(
                     "STREAK: $_streak",
                     style: const TextStyle(
-                      color: Colors.orange,
+                      color: Colors.orangeAccent,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -347,17 +386,22 @@ class _GardenScreenState extends State<GardenScreen>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1B2E21),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           "LEVEL UP!",
           style: TextStyle(color: Color(0xFF8DAA91)),
         ),
         content: Text(
           "You've reached Level $level and unlocked new garden energy!",
+          style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("AWESOME"),
+            child: const Text(
+              "AWESOME",
+              style: TextStyle(color: Color(0xFF8DAA91)),
+            ),
           ),
         ],
       ),
