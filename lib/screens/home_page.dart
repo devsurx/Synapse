@@ -10,8 +10,8 @@ import 'dart:ui';
 import '../services/pdf_service.dart';
 import 'flashcard_screen.dart';
 import 'Eli5LabScreen.dart';
-import 'onboarding_screen.dart';
-import '../main.dart'; // Ensure this points to where your LoginScreen is defined
+import '../garden.dart';
+import '../main.dart';
 
 // --- 1. LEVEL UP OVERLAY ---
 class LevelUpOverlay extends StatelessWidget {
@@ -116,10 +116,10 @@ class _HomePageState extends State<HomePage> {
   String? _fileName;
   List<double> _weeklyPoints = [2, 5, 8, 4, 9, 6, 3];
 
+  // Synced Garden Stats
   int _gardenLevel = 1;
   double _gardenExp = 0.0;
 
-  // Time & Greeting State
   late Timer _timeTimer;
   String _currentTime = "";
   String _greeting = "";
@@ -129,7 +129,6 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _loadAllData();
     _updateTime();
-    // Update clock every minute
     _timeTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _updateTime();
     });
@@ -170,22 +169,27 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Unified EXP method used by Todos and PDF uploads
   Future<void> _addExp(double amount) async {
     final prefs = await SharedPreferences.getInstance();
     int todayIndex = DateTime.now().weekday - 1;
 
-    setState(() {
-      _weeklyPoints[todayIndex] += amount;
-      _gardenExp += amount;
+    double newExp = _gardenExp + amount;
+    int newLevel = _gardenLevel;
 
-      if (_gardenExp >= 1.0) {
-        _gardenExp = 0.0;
-        _gardenLevel++;
-        _showLevelUp = true;
-        HapticFeedback.heavyImpact();
-      } else {
-        HapticFeedback.lightImpact();
-      }
+    if (newExp >= 1.0) {
+      newExp = newExp - 1.0;
+      newLevel++;
+      setState(() => _showLevelUp = true);
+      HapticFeedback.heavyImpact();
+    } else {
+      HapticFeedback.lightImpact();
+    }
+
+    setState(() {
+      _weeklyPoints[todayIndex] += (amount * 10);
+      _gardenExp = newExp;
+      _gardenLevel = newLevel;
     });
 
     await prefs.setStringList(
@@ -211,7 +215,19 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 20),
                   _buildTopBar(),
                   const SizedBox(height: 20),
-                  _buildGardenStatus(),
+                  // Clickable Garden Status
+                  GestureDetector(
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const GardenScreen(),
+                        ),
+                      );
+                      _loadAllData(); // Refresh when returning
+                    },
+                    child: _buildGardenStatus(),
+                  ),
                   const SizedBox(height: 30),
                   _buildBentoHero(),
                   const SizedBox(height: 16),
@@ -321,30 +337,40 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "GARDEN LEVEL $_gardenLevel",
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                    color: Colors.white,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "GARDEN LEVEL $_gardenLevel",
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      "${(_gardenExp * 100).toInt()}%",
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white38,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 8),
                 LinearProgressIndicator(
                   value: _gardenExp,
                   backgroundColor: Colors.white10,
                   color: const Color(0xFF8DAA91),
                   borderRadius: BorderRadius.circular(10),
+                  minHeight: 6,
                 ),
               ],
             ),
           ),
           const SizedBox(width: 15),
-          const Text(
-            "1,240 Online",
-            style: TextStyle(fontSize: 10, color: Colors.white38),
-          ),
+          const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white24),
         ],
       ),
     );
@@ -474,7 +500,7 @@ class _HomePageState extends State<HomePage> {
         key: Key(_todos[i] + i.toString()),
         onDismissed: (_) {
           setState(() => _todos.removeAt(i));
-          _addExp(0.2);
+          _addExp(0.15); // Completing a todo gives 15% progress
           _saveTodos();
         },
         child: Container(
@@ -528,7 +554,7 @@ class _HomePageState extends State<HomePage> {
         _fileName = result.files.single.name;
         _isExtracting = false;
       });
-      _addExp(0.5);
+      _addExp(0.3); // Uploading a PDF gives 30% progress
     }
   }
 

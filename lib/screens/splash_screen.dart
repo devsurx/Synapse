@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:ui'; // Required for ImageFilter
+// Required for ImageFilter
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import 'onboarding_screen.dart';

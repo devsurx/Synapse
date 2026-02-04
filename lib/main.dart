@@ -7,7 +7,6 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'screens/home_page.dart';
 import 'screens/plan_screen.dart';
 import 'screens/chat_screen.dart';
-import 'screens/onboarding_screen.dart';
 import 'screens/splash_screen.dart'; // Using your animated splash now
 import 'garden.dart';
 import 'screens/synapse_error_screen.dart';

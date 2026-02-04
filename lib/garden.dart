@@ -15,7 +15,6 @@ class GardenScreen extends StatefulWidget {
 
 class _GardenScreenState extends State<GardenScreen>
     with SingleTickerProviderStateMixin {
-  // --- STATE VARIABLES ---
   late AnimationController _animController;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
@@ -26,6 +25,7 @@ class _GardenScreenState extends State<GardenScreen>
 
   int _totalFocusMinutes = 0;
   int _currentLevel = 1;
+  double _currentExp = 0.0; // Added to sync with homepage
   int _streak = 0;
   bool _isLoading = true;
 
@@ -48,30 +48,23 @@ class _GardenScreenState extends State<GardenScreen>
     super.dispose();
   }
 
-  // --- AUDIO SETUP ---
   void _setupAudio() async {
     await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    // Note: Ensure your asset is added to pubspec.yaml
-    // await _audioPlayer.setSource(AssetSource('audio/zen.mp3'));
   }
 
-  // --- DATA LOGIC: LOAD & PERSIST ---
   Future<void> _loadGardenData() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // 1. Load basic stats
     int mins = prefs.getInt('focus_minutes') ?? 0;
     int streak = prefs.getInt('streak') ?? 0;
+    int level = prefs.getInt('garden_level') ?? 1;
+    double exp = prefs.getDouble('garden_exp') ?? 0.0;
     String? lastDateStr = prefs.getString('last_focus_date');
 
-    // 2. Calculate Streak Logic
     if (lastDateStr != null) {
       DateTime lastDate = DateTime.parse(lastDateStr);
       DateTime today = DateTime.now();
-      int difference = today.difference(lastDate).inDays;
-
-      if (difference > 1) {
-        // User missed more than a day, reset streak
+      if (today.difference(lastDate).inDays > 1) {
         streak = 0;
         await prefs.setInt('streak', 0);
       }
@@ -79,7 +72,8 @@ class _GardenScreenState extends State<GardenScreen>
 
     setState(() {
       _totalFocusMinutes = mins;
-      _currentLevel = (mins ~/ 25) + 1;
+      _currentLevel = level;
+      _currentExp = exp;
       _streak = streak;
       _isLoading = false;
     });
@@ -107,58 +101,51 @@ class _GardenScreenState extends State<GardenScreen>
     _timer?.cancel();
     final prefs = await SharedPreferences.getInstance();
 
-    // 1. Calculate new values
-    int newMins = _totalFocusMinutes + 25;
-    int oldLevel = _currentLevel;
-    int newLevel = (newMins ~/ 25) + 1;
+    // EXP Logic synced with Homepage (Each session = 0.25 EXP)
+    double newExp = _currentExp + 0.25;
+    int newLevel = _currentLevel;
 
-    // 2. Handle Streak logic on completion
-    String? lastDateStr = prefs.getString('last_focus_date');
+    if (newExp >= 1.0) {
+      newExp = 0.0;
+      newLevel++;
+      _showUnlockPopup(newLevel);
+    }
+
     int updatedStreak = _streak;
     DateTime today = DateTime.now();
+    String? lastDateStr = prefs.getString('last_focus_date');
 
     if (lastDateStr == null) {
       updatedStreak = 1;
     } else {
       DateTime lastDate = DateTime.parse(lastDateStr);
-      // If last focus was yesterday, increment streak. If today, keep same.
       if (today.difference(lastDate).inDays == 1) {
         updatedStreak++;
-      } else if (today.difference(lastDate).inDays > 1) {
+      } else if (today.difference(lastDate).inDays > 1)
         updatedStreak = 1;
-      }
     }
 
-    // 3. Save to disk
-    await prefs.setInt('focus_minutes', newMins);
+    // Save using shared keys
+    await prefs.setInt('focus_minutes', _totalFocusMinutes + 25);
+    await prefs.setInt('garden_level', newLevel);
+    await prefs.setDouble('garden_exp', newExp);
     await prefs.setInt('streak', updatedStreak);
     await prefs.setString('last_focus_date', today.toIso8601String());
 
     setState(() {
-      _totalFocusMinutes = newMins;
+      _totalFocusMinutes += 25;
       _currentLevel = newLevel;
+      _currentExp = newExp;
       _streak = updatedStreak;
       _isTimerRunning = false;
       _secondsRemaining = 25 * 60;
     });
 
-    if (newLevel > oldLevel) _showUnlockPopup(newLevel);
     await _audioPlayer.stop();
     HapticFeedback.heavyImpact();
   }
 
-  // --- DYNAMIC VISUAL HELPERS ---
-  List<Color> _getThemeGradient() {
-    int hour = DateTime.now().hour;
-    if (hour >= 5 && hour < 11)
-      return [const Color(0xFF142B1A), const Color(0xFF0F0F0F)];
-    if (hour >= 11 && hour < 17)
-      return [const Color(0xFF1B2E21), const Color(0xFF0F0F0F)];
-    if (hour >= 17 && hour < 20)
-      return [const Color(0xFF2E241B), const Color(0xFF0F0F0F)];
-    return [const Color(0xFF0A141D), const Color(0xFF050505)];
-  }
-
+  // Visual Rank Logic
   String _getRank() {
     if (_currentLevel >= 50) return "FOREST SPIRIT";
     if (_currentLevel >= 20) return "FLOWER CHILD";
@@ -174,15 +161,15 @@ class _GardenScreenState extends State<GardenScreen>
     return "🌱";
   }
 
-  // --- UI WIDGETS ---
   @override
   Widget build(BuildContext context) {
-    if (_isLoading)
+    if (_isLoading) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFF8DAA91)),
         ),
       );
+    }
 
     return Scaffold(
       body: AnimatedContainer(
@@ -227,6 +214,66 @@ class _GardenScreenState extends State<GardenScreen>
         ),
       ),
     );
+  }
+
+  // UI Helper methods stay similar but use synced _currentExp
+  Widget _buildStatsCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(25),
+          color: Colors.white.withOpacity(0.03),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "LEVEL $_currentLevel",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    "STREAK: $_streak",
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              LinearProgressIndicator(
+                value: _currentExp, // Linked EXP
+                backgroundColor: Colors.white10,
+                color: const Color(0xFF8DAA91),
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ... (Rest of garden.dart helper methods: _getThemeGradient, _buildGardenCore, etc.)
+  List<Color> _getThemeGradient() {
+    int hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 11) {
+      return [const Color(0xFF142B1A), const Color(0xFF0F0F0F)];
+    }
+    if (hour >= 11 && hour < 17) {
+      return [const Color(0xFF1B2E21), const Color(0xFF0F0F0F)];
+    }
+    if (hour >= 17 && hour < 20) {
+      return [const Color(0xFF2E241B), const Color(0xFF0F0F0F)];
+    }
+    return [const Color(0xFF0A141D), const Color(0xFF050505)];
   }
 
   Widget _buildGardenCore() {
@@ -314,50 +361,6 @@ class _GardenScreenState extends State<GardenScreen>
             color: _isTimerRunning ? Colors.white : Colors.black,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.5,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatsCard() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(30),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(25),
-          color: Colors.white.withOpacity(0.03),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "LEVEL $_currentLevel",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    "STREAK: $_streak",
-                    style: const TextStyle(
-                      color: Colors.orangeAccent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              LinearProgressIndicator(
-                value: (_totalFocusMinutes % 25) / 25,
-                backgroundColor: Colors.white10,
-                color: const Color(0xFF8DAA91),
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ],
           ),
         ),
       ),
