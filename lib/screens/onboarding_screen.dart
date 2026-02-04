@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../main.dart'; // Adjust based on your MainNavigation location
+import '../main.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -17,33 +17,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     {
       "title": "Upload & Extract",
       "desc":
-          "Upload your lecture PDFs. Our AI extracts the core concepts so you don't have to hunt through pages of text.",
+          "Turn your lecture PDFs into knowledge. Powered by Gemini 2.5-Flash, we extract core concepts instantly so you can skip the fluff.",
       "icon": "📄",
     },
     {
-      "title": "AI Tutor & Voice",
+      "title": "ELI5 Laboratory",
       "desc":
-          "Chat with your notes using text or voice. Ask questions, clarify doubts, and get instant explanations.",
-      "icon": "🎙️",
+          "Confused by jargon? Our lab uses Gemini 2.5-Flash-Lite to turn complex theories into simple, catchy analogies in seconds.",
+      "icon": "🧪",
+    },
+    {
+      "title": "Grow Your Garden",
+      "desc":
+          "Gamify your focus. Start a Pomodoro timer and watch your digital plant grow. Every minute of focus helps your garden bloom.",
+      "icon": "🌱",
+    },
+    {
+      "title": "AI Flashcards",
+      "desc":
+          "Master active recall. Generate smart flashcards via Gemini 2.5-Flash-Lite, optimized for quick memory sessions and high RPD.",
+      "icon": "🃏",
     },
     {
       "title": "Dynamic Roadmaps",
       "desc":
-          "Generate custom study plans for 1 hour, 1 day, or 1 week based entirely on your specific material.",
+          "Never feel lost again. Gemini 2.5-Flash builds custom study plans based on your material, whether you have an hour or a week.",
       "icon": "🗺️",
-    },
-    {
-      "title": "Quiz Mode",
-      "desc":
-          "Test your knowledge with AI-generated quizzes. No more 'random biology'—just what's in your file.",
-      "icon": "🧠",
     },
   ];
 
-  // Inside onboarding_screen.dart button tap
   void _finishOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_first_time', false); // The "Key" to the front door
+    await prefs.setBool('is_first_time', false);
 
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -94,6 +99,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 FloatingActionButton(
                   backgroundColor: const Color(0xFF8DAA91),
+                  elevation: 0,
                   onPressed: () {
                     if (_currentPage == _pages.length - 1) {
                       _finishOnboarding();
@@ -108,7 +114,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     _currentPage == _pages.length - 1
                         ? Icons.check
                         : Icons.arrow_forward_ios,
-                    color: Colors.white,
+                    color:
+                        Colors.black, // Dark icon on light green looks modern
                   ),
                 ),
               ],
@@ -125,15 +132,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(_pages[i]["icon"]!, style: const TextStyle(fontSize: 80)),
-          const SizedBox(height: 40),
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              // REMOVE 'const' from here because .withOpacity is a method call
+              color: const Color(0xFF8DAA91).withOpacity(0.1),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              _pages[i]["icon"]!,
+              style: const TextStyle(fontSize: 60),
+            ),
+          ),
+          const SizedBox(height: 50),
           Text(
             _pages[i]["title"]!,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 28,
+              fontSize: 32,
               fontWeight: FontWeight.bold,
               color: Colors.white,
+              letterSpacing: -1,
             ),
           ),
           const SizedBox(height: 20),
@@ -143,7 +164,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             style: const TextStyle(
               fontSize: 16,
               color: Colors.white54,
-              height: 1.5,
+              height: 1.6,
             ),
           ),
         ],
@@ -158,6 +179,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       height: 8,
       width: _currentPage == index ? 24 : 8,
       decoration: BoxDecoration(
+        // Corrected the color logic - remove 'const' from the conditional branch
         color: _currentPage == index ? const Color(0xFF8DAA91) : Colors.white10,
         borderRadius: BorderRadius.circular(4),
       ),

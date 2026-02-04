@@ -1,42 +1,93 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For Haptics
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:percent_indicator/percent_indicator.dart';
-import 'package:audioplayers/audioplayers.dart'; // For Sounds
+import 'dart:ui';
+
 import '../services/pdf_service.dart';
 import 'quiz_screen.dart';
+import 'flashcard_screen.dart';
+import 'Eli5LabScreen.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'onboarding_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class SubtleAdWidget extends StatefulWidget {
+  const SubtleAdWidget({super.key});
+
+  @override
+  State<SubtleAdWidget> createState() => _SubtleAdWidgetState();
+}
+
+class _SubtleAdWidgetState extends State<SubtleAdWidget> {
+  NativeAd? _nativeAd;
+  bool _isLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAd();
+  }
+
+  void _loadAd() {
+    _nativeAd = NativeAd(
+      adUnitId: 'ca-app-pub-3940256099942544/2247696110', // Test ID
+      factoryId: 'listTile',
+      request: const AdRequest(),
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint("Ad failed to load: $error");
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _nativeAd?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isLoaded || _nativeAd == null) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      height: 72,
+      alignment: Alignment.center,
+      child: AdWidget(ad: _nativeAd!),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
   final String userName;
   final Function(String) onPdfUploaded;
 
-  const HomeScreen({
+  const HomePage({
     super.key,
     required this.userName,
     required this.onPdfUploaded,
   });
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  // Persistence & PDF State
+class _HomePageState extends State<HomePage> {
   bool _isExtracting = false;
   List<String> _todos = [];
   String? _fileName;
-  final TextEditingController _todoController = TextEditingController();
-  final DateFormat _timeFormat = DateFormat('hh:mm a');
+  List<double> _weeklyPoints = [2, 5, 8, 4, 9, 6, 3];
 
-  // Pomodoro Timer State
-  int _secondsLeft = 1500; // 25 Minutes
-  Timer? _timer;
-  bool _isTimerRunning = false;
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  int _gardenLevel = 1;
+  double _gardenExp = 0.3;
 
   @override
   void initState() {
@@ -44,107 +95,207 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadAllData();
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _audioPlayer.dispose();
-    _todoController.dispose();
-    super.dispose();
-  }
-
-  // --- LOGIC: PERSISTENCE ---
   Future<void> _loadAllData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _todos = prefs.getStringList('todos') ?? [];
       _fileName = prefs.getString('current_file_name');
-      String? savedText = prefs.getString('saved_pdf_text');
-      if (savedText != null) widget.onPdfUploaded(savedText);
-    });
-  }
+      _gardenLevel = prefs.getInt('garden_level') ?? 1;
+      _gardenExp = prefs.getDouble('garden_exp') ?? 0.0;
 
-  Future<void> _resetEverything() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    setState(() {
-      _todos = [];
-      _fileName = null;
-      _secondsLeft = 1500;
-      _isTimerRunning = false;
-    });
-    widget.onPdfUploaded("");
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("All data wiped. Starting fresh."),
-        backgroundColor: Colors.orangeAccent,
-      ),
-    );
-  }
-
-  // --- LOGIC: POMODORO (WITH AUDIO & HAPTICS) ---
-  void _toggleTimer() {
-    if (_isTimerRunning) {
-      _timer?.cancel();
-      setState(() => _isTimerRunning = false);
-    } else {
-      _startPomodoro();
-    }
-  }
-
-  void _startPomodoro() async {
-    HapticFeedback.lightImpact();
-    try {
-      await _audioPlayer.play(AssetSource('sounds/start_click.mp3'));
-    } catch (e) {
-      debugPrint("Audio play error: $e");
-    }
-
-    setState(() => _isTimerRunning = true);
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_secondsLeft > 0) {
-        setState(() => _secondsLeft--);
-      } else {
-        _timer?.cancel();
-        _handleTimerComplete();
+      List<String>? savedPoints = prefs.getStringList('weekly_points');
+      if (savedPoints != null) {
+        _weeklyPoints = savedPoints.map((e) => double.parse(e)).toList();
       }
     });
   }
 
-  void _handleTimerComplete() async {
-    HapticFeedback.vibrate();
-    try {
-      await _audioPlayer.play(AssetSource('sounds/alarm.mp3'));
-    } catch (e) {
-      debugPrint("Audio play error: $e");
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 20),
+              _buildTopBar(),
+              const SizedBox(height: 20),
+              _buildGardenStatus(),
+              const SizedBox(height: 30),
+              _buildBentoHero(), // Now full width without timer
+              const SizedBox(height: 16),
+              _buildFeatureRow(),
+              const SizedBox(height: 32),
+              _buildGlassCard(title: "WEEKLY MOMENTUM", child: _buildChart()),
+              const SizedBox(height: 32),
+              _buildGlassCard(
+                title: "DAILY MISSIONS",
+                child: Column(
+                  children: [
+                    _buildTodoInput(),
+                    const SizedBox(height: 16),
+                    _buildTodoList(),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 120),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-    setState(() {
-      _isTimerRunning = false;
-      _secondsLeft = 1500;
-    });
+  Widget _buildGardenStatus() {
+    return _glassContainer(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      child: Row(
+        children: [
+          const Text("🌱", style: TextStyle(fontSize: 24)),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "GARDEN LEVEL $_gardenLevel",
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                LinearProgressIndicator(
+                  value: _gardenExp,
+                  backgroundColor: Colors.white10,
+                  color: const Color(0xFF8DAA91),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 15),
+          const Text(
+            "1,240 Studying Now",
+            style: TextStyle(fontSize: 10, color: Colors.white38),
+          ),
+        ],
+      ),
+    );
+  }
 
-    if (!mounted) return;
+  Widget _buildFeatureRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: _glassContainer(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const FlashcardScreen()),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.style_rounded, size: 18, color: Color(0xFFD4A373)),
+                SizedBox(width: 8),
+                Text(
+                  "FLASHCARDS",
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _glassContainer(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const Eli5LabScreen()),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.biotech_rounded, size: 18, color: Color(0xFF8DAA91)),
+                SizedBox(width: 8),
+                Text(
+                  "ELI5 LAB",
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "GOOD MORNING",
+              style: TextStyle(
+                color: Colors.white24,
+                fontSize: 10,
+                letterSpacing: 2,
+              ),
+            ),
+            Text(
+              widget.userName,
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        IconButton(
+          icon: const Icon(Icons.logout_rounded, color: Colors.white24),
+          onPressed: () => _showLogoutDialog(),
+        ),
+      ],
+    );
+  }
+
+  void _showLogoutDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "Time's Up! ☕",
-          style: TextStyle(color: Colors.white),
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text("Logout", style: TextStyle(color: Colors.white)),
+        content: const Text(
+          "Are you sure you want to log out? Your garden progress will be saved.",
+          style: TextStyle(color: Colors.white70),
         ),
-        content: const Text("Great focus. Take a break!"),
         actions: [
           TextButton(
-            onPressed: () {
-              _audioPlayer.stop();
-              Navigator.pop(context);
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "CANCEL",
+              style: TextStyle(color: Colors.white24),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('isLoggedIn', false);
+              if (mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const OnboardingScreen(),
+                  ),
+                  (route) => false,
+                );
+              }
             },
             child: const Text(
-              "Got it",
+              "LOGOUT",
               style: TextStyle(color: Color(0xFF8DAA91)),
             ),
           ),
@@ -153,406 +304,245 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- LOGIC: PDF UPLOAD ---
-  Future<void> _pickFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
-
-    if (result != null) {
-      setState(() => _isExtracting = true);
-      String name = result.files.single.name;
-      String text = await PdfService.extractText(result.files.single.path!);
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('saved_pdf_text', text);
-      await prefs.setString('current_file_name', name);
-
-      widget.onPdfUploaded(text);
-      setState(() {
-        _fileName = name;
-        _isExtracting = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 20),
-            _buildHeader(),
-            const SizedBox(height: 30),
-            _buildBentoGrid(),
-            const SizedBox(height: 32),
-            _buildProgressChart(),
-            const SizedBox(height: 40),
-            const Text(
-              "DAILY TARGETS",
-              style: TextStyle(
-                letterSpacing: 2,
-                fontSize: 12,
-                color: Colors.white24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildTodoInput(),
-            const SizedBox(height: 16),
-            _buildTodoList(),
-            const SizedBox(height: 120),
-          ],
-        ),
+  Widget _buildBentoHero() {
+    return _glassContainer(
+      height: 140,
+      gradient: LinearGradient(
+        colors: [
+          const Color(0xFF8DAA91).withOpacity(0.5),
+          const Color(0xFF8DAA91).withOpacity(0.1),
+        ],
       ),
-    );
-  }
-
-  // --- UI COMPONENTS ---
-
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "${_getGreeting()}, ${widget.userName}.",
-              style: const TextStyle(color: Colors.white38, fontSize: 16),
-            ),
-            const Text(
-              "Your Space",
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Colors.white24),
-              onPressed: _showResetConfirmation,
-            ),
-            _buildClockPill(),
-          ],
-        ),
-      ],
-    );
-  }
-
-  void _showResetConfirmation() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text("Reset All Data?"),
-        content: const Text("This will wipe all PDFs and plans."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+      onTap: _pickFile,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _isExtracting ? Icons.sync : Icons.auto_awesome,
+            color: Colors.white,
+            size: 40,
           ),
-          TextButton(
-            onPressed: () {
-              _resetEverything();
-              Navigator.pop(context);
-            },
-            child: const Text(
-              "Reset",
-              style: TextStyle(color: Colors.redAccent),
-            ),
+          const SizedBox(height: 12),
+          Text(
+            _fileName ?? "Upload PDF to Study",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "AI analyzes your document for Quizzes & Flashcards",
+            style: TextStyle(fontSize: 11, color: Colors.white70),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildClockPill() {
-    return StreamBuilder<DateTime>(
-      stream: Stream.periodic(
-        const Duration(seconds: 1),
-        (_) => DateTime.now(),
-      ),
-      builder: (context, snapshot) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
+  Widget _glassContainer({
+    required Widget child,
+    double? height,
+    EdgeInsets? padding,
+    VoidCallback? onTap,
+    Gradient? gradient,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            height: height,
+            width: double.infinity,
+            padding: padding ?? const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.03),
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: child,
           ),
-          child: Text(
-            _timeFormat.format(snapshot.data ?? DateTime.now()),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF8DAA91),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBentoGrid() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(flex: 2, child: _buildPdfTile()),
-            const SizedBox(width: 16),
-            Expanded(child: _buildTimerTile()),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildQuizTile(),
-      ],
-    );
-  }
-
-  Widget _buildPdfTile() {
-    return GestureDetector(
-      onTap: _pickFile,
-      child: _bentoBox(
-        color: const Color(0xFF8DAA91),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _isExtracting ? Icons.sync : Icons.cloud_upload_outlined,
-              color: Colors.white,
-              size: 32,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _fileName ?? "Upload PDF",
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildTimerTile() {
-    return GestureDetector(
-      onTap: _toggleTimer,
-      child: _bentoBox(
-        color: Colors.white.withOpacity(0.05),
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 1.0, end: _isTimerRunning ? 1.05 : 1.0),
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.easeInOut,
-          builder: (context, scale, child) {
-            return Transform.scale(
-              scale: scale,
-              child: CircularPercentIndicator(
-                radius: 40.0,
-                lineWidth: 4.0,
-                percent: _secondsLeft / 1500,
-                center: Text(
-                  "${(_secondsLeft ~/ 60)}m",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: _isTimerRunning
-                        ? const Color(0xFF8DAA91)
-                        : Colors.white,
-                  ),
-                ),
-                progressColor: const Color(0xFF8DAA91),
-                backgroundColor: Colors.white10,
-                circularStrokeCap: CircularStrokeCap.round,
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuizTile() {
-    return GestureDetector(
-      onTap: () async {
-        final prefs = await SharedPreferences.getInstance();
-        final savedText = prefs.getString('saved_pdf_text');
-        if (savedText != null && savedText.isNotEmpty) {
-          if (!mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => QuizScreen(studyContext: savedText),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text("Upload PDF first!")));
-        }
-      },
-      child: Container(
-        height: 80,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.psychology, color: Color(0xFF8DAA91)),
-                SizedBox(width: 12),
-                Text(
-                  "Test Knowledge",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProgressChart() {
+  Widget _buildGlassCard({required String title, required Widget child}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "WEEKLY ACTIVITY",
-          style: TextStyle(
+        Text(
+          title,
+          style: const TextStyle(
             letterSpacing: 2,
-            fontSize: 12,
-            color: Colors.white24,
+            fontSize: 10,
+            color: Colors.white30,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 16),
-        Container(
-          height: 150,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.03),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: BarChart(
-            BarChartData(
-              alignment: BarChartAlignment.spaceAround,
-              maxY: 10,
-              titlesData: const FlTitlesData(show: false),
-              gridData: const FlGridData(show: false),
-              borderData: FlBorderData(show: false),
-              barGroups: List.generate(
-                7,
-                (i) => _makeBar(i, [5.0, 8.0, 4.0, 9.0, 7.0, 6.0, 3.0][i]),
-              ),
-            ),
-          ),
-        ),
+        const SizedBox(height: 12),
+        _glassContainer(child: child, padding: const EdgeInsets.all(20)),
       ],
     );
   }
 
-  BarChartGroupData _makeBar(int x, double y) {
-    return BarChartGroupData(
-      x: x,
-      barRods: [
-        BarChartRodData(
-          toY: y,
-          color: const Color(0xFF8DAA91),
-          width: 12,
-          borderRadius: BorderRadius.circular(4),
+  Widget _buildChart() {
+    return SizedBox(
+      height: 150,
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: 15,
+          titlesData: FlTitlesData(
+            show: true,
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (v, m) => Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    ['M', 'T', 'W', 'T', 'F', 'S', 'S'][v.toInt()],
+                    style: const TextStyle(color: Colors.white24, fontSize: 10),
+                  ),
+                ),
+              ),
+            ),
+            leftTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+          ),
+          gridData: const FlGridData(show: false),
+          borderData: FlBorderData(show: false),
+          barGroups: List.generate(
+            7,
+            (i) => BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: _weeklyPoints[i],
+                  color: i == DateTime.now().weekday - 1
+                      ? const Color(0xFF8DAA91)
+                      : Colors.white10,
+                  width: 14,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ],
+            ),
+          ),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildTodoInput() {
     return TextField(
-      controller: _todoController,
-      onSubmitted: (val) async {
-        if (val.isEmpty) return;
-        final prefs = await SharedPreferences.getInstance();
-        setState(() => _todos.add(val));
-        await prefs.setStringList('todos', _todos);
-        _todoController.clear();
+      onSubmitted: (v) {
+        if (v.isNotEmpty) {
+          setState(() => _todos.add(v));
+          _saveTodos();
+        }
       },
       decoration: InputDecoration(
-        hintText: "Add a task...",
+        hintText: "Add mission...",
+        prefixIcon: const Icon(Icons.add, color: Color(0xFF8DAA91)),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.03),
+        fillColor: Colors.white.withOpacity(0.05),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
-        prefixIcon: const Icon(Icons.add, color: Color(0xFF8DAA91)),
       ),
     );
+  }
+
+  Future<void> _saveTodos() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('todos', _todos);
   }
 
   Widget _buildTodoList() {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: _todos.length,
-      itemBuilder: (context, i) => Dismissible(
-        key: Key(_todos[i] + i.toString()),
-        onDismissed: (_) async {
-          final prefs = await SharedPreferences.getInstance();
-          setState(() => _todos.removeAt(i));
-          await prefs.setStringList('todos', _todos);
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.radio_button_off,
-                size: 20,
-                color: Colors.white24,
+      itemCount: _todos.length + (_todos.isNotEmpty ? 1 : 0),
+      itemBuilder: (context, i) {
+        if (i == 1 && _todos.isNotEmpty) return const SubtleAdWidget();
+        final todoIndex = (i > 1) ? i - 1 : i;
+        if (todoIndex < _todos.length) return _buildTodoTile(todoIndex);
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildTodoTile(int index) {
+    return Dismissible(
+      key: Key(_todos[index] + index.toString()),
+      onDismissed: (direction) async {
+        final prefs = await SharedPreferences.getInstance();
+        setState(() {
+          _todos.removeAt(index);
+          _gardenExp += 0.1;
+          if (_gardenExp >= 1.0) {
+            _gardenExp = 0.0;
+            _gardenLevel++;
+          }
+        });
+        await prefs.setStringList('todos', _todos);
+        await prefs.setInt('garden_level', _gardenLevel);
+        await prefs.setDouble('garden_exp', _gardenExp);
+        HapticFeedback.lightImpact();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.circle_outlined,
+              size: 20,
+              color: const Color(0xFF8DAA91).withOpacity(0.5),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                _todos[index],
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
-              const SizedBox(width: 16),
-              Text(_todos[i], style: const TextStyle(fontSize: 16)),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_left, size: 14, color: Colors.white10),
+          ],
         ),
       ),
     );
   }
 
-  Widget _bentoBox({required Color color, required Widget child}) {
-    return Container(
-      height: 140,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: child,
+  Future<void> _pickFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
     );
-  }
-
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return "Good Morning";
-    if (hour < 17) return "Good Afternoon";
-    return "Good Evening";
+    if (result != null) {
+      setState(() => _isExtracting = true);
+      String text = await PdfService.extractText(result.files.single.path!);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_pdf_text', text);
+      await prefs.setString('current_file_name', result.files.single.name);
+      widget.onPdfUploaded(text);
+      setState(() {
+        _fileName = result.files.single.name;
+        _isExtracting = false;
+      });
+    }
   }
 }

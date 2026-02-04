@@ -20,7 +20,7 @@ class _PlanScreenState extends State<PlanScreen> {
   void initState() {
     super.initState();
     _model = GenerativeModel(
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       apiKey: 'AIzaSyCAnahv3xdlsl5Gc4lrxYYoCyR74tke2NI',
     );
     // Auto-generate if context exists

@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-// Import your new screen files
+// Import your custom screens
 import 'screens/home_page.dart';
 import 'screens/plan_screen.dart';
 import 'screens/chat_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'garden.dart'; // New Import
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await MobileAds.instance.initialize();
   runApp(const StudyCoachApp());
 }
 
@@ -28,13 +32,12 @@ class StudyCoachApp extends StatelessWidget {
           secondary: Color(0xFFD4A373),
         ),
       ),
-      // App starts here
       home: const SplashScreen(),
     );
   }
 }
 
-// --- FEATURE: ANIMATED SPLASH SCREEN ---
+// --- SPLASH SCREEN ---
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -50,25 +53,23 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigateToNext() async {
-    // 1. Wait for 2 seconds to show the logo
-    await Future.delayed(const Duration(seconds: 2));
-
-    // 2. Check if user is logged in
+    await Future.delayed(const Duration(seconds: 3));
     final prefs = await SharedPreferences.getInstance();
+
     final String? userName = prefs.getString('user_name');
+    final bool isFirstTime = prefs.getBool('is_first_time') ?? true;
 
     if (!mounted) return;
 
-    // 3. Navigate based on result
-    if (userName != null) {
+    if (userName == null || isFirstTime) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const MainNavigationHolder()),
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     } else {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const MainNavigationHolder()),
       );
     }
   }
@@ -81,7 +82,6 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // A simple, cozy logo icon
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -94,14 +94,14 @@ class _SplashScreenState extends State<SplashScreen> {
                   color: Color(0xFF8DAA91),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               const Text(
                 "STUDY COZY",
                 style: TextStyle(
-                  fontSize: 24,
-                  letterSpacing: 4,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white70,
+                  fontSize: 28,
+                  letterSpacing: 6,
+                  fontWeight: FontWeight.w200,
+                  color: Colors.white,
                 ),
               ),
             ],
@@ -122,16 +122,17 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _nameController = TextEditingController();
 
-  Future<void> _saveUser() async {
-    if (_nameController.text.trim().isNotEmpty) {
+  Future<void> _handleGetStarted() async {
+    String name = _nameController.text.trim();
+    if (name.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_name', _nameController.text.trim());
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainNavigationHolder()),
-        );
-      }
+      await prefs.setString('user_name', name);
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+      );
     }
   }
 
@@ -147,32 +148,44 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const Text(
                 "Welcome,",
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
               ),
               const Text(
-                "What is your name?",
-                style: TextStyle(color: Colors.white54),
+                "What should we call you?",
+                style: TextStyle(fontSize: 18, color: Colors.white54),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 40),
               TextField(
                 controller: _nameController,
+                style: const TextStyle(fontSize: 18),
                 decoration: InputDecoration(
-                  hintText: "Enter name...",
+                  hintText: "Your name...",
                   filled: true,
                   fillColor: Colors.white.withOpacity(0.05),
+                  contentPadding: const EdgeInsets.all(20),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity,
-                height: 60,
+                height: 65,
                 child: ElevatedButton(
-                  onPressed: _saveUser,
-                  child: const Text("Get Started"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8DAA91),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  onPressed: _handleGetStarted,
+                  child: const Text(
+                    "Continue",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -194,76 +207,57 @@ class MainNavigationHolder extends StatefulWidget {
 class _MainNavigationHolderState extends State<MainNavigationHolder> {
   int _currentIndex = 0;
   final PageController _pageController = PageController();
-  String _userName = "friend";
-
-  // This holds the text extracted from the PDF globally for the session
+  String _userName = "Student";
   String? _currentStudyContext;
-
-  Future<void> _saveData(String key, String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(key, value);
-  }
-
-  Future<void> _loadPersistentData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _currentStudyContext = prefs.getString('saved_pdf_text');
-      // You can also load chat history or plans here
-    });
-  }
 
   @override
   void initState() {
     super.initState();
-    _loadName();
-    _loadPersistentData(); // Load everything when app starts
+    _initAppData();
   }
 
-  Future<void> _loadName() async {
+  Future<void> _initAppData() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() => _userName = prefs.getString('user_name') ?? "friend");
+    setState(() {
+      _userName = prefs.getString('user_name') ?? "Student";
+      _currentStudyContext = prefs.getString('saved_pdf_text');
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Detects if the keyboard is open
     final bool isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Scaffold(
-      resizeToAvoidBottomInset:
-          true, // Prevents navbar from jumping up with keyboard
       body: Stack(
         children: [
-          // 1. The Screen Content
-          // Inside MainNavigationHolder in main.dart
           PageView(
             controller: _pageController,
             onPageChanged: (i) => setState(() => _currentIndex = i),
             children: [
-              HomeScreen(
+              HomePage(
                 userName: _userName,
                 onPdfUploaded: (text) =>
                     setState(() => _currentStudyContext = text),
               ),
-              // Update this line:
+              GardenScreen(), // Added Garden here
               PlanScreen(studyContext: _currentStudyContext),
               ChatScreen(studyContext: _currentStudyContext),
             ],
           ),
 
-          // 2. The Floating Island Navbar
+          // Updated Floating Navbar with 4 items
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             left: 20,
             right: 20,
-            // Hides the navbar by moving it 100px off-screen when keyboard is up
             bottom: isKeyboardVisible ? -100 : 30,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(30),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
-                  height: 70,
+                  height: 75,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(30),
@@ -272,24 +266,10 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildNavItem(
-                        0,
-                        Icons.home_filled,
-                        Icons.home_outlined,
-                        "Home",
-                      ),
-                      _buildNavItem(
-                        1,
-                        Icons.calendar_month,
-                        Icons.calendar_month_outlined,
-                        "Plan",
-                      ),
-                      _buildNavItem(
-                        2,
-                        Icons.chat_bubble_rounded,
-                        Icons.chat_bubble_outline,
-                        "Tutor",
-                      ),
+                      _navItem(0, Icons.home_rounded, "Home"),
+                      _navItem(1, Icons.yard_rounded, "Garden"), // Garden Icon
+                      _navItem(2, Icons.auto_awesome_mosaic_rounded, "Plan"),
+                      _navItem(3, Icons.psychology_rounded, "Tutor"),
                     ],
                   ),
                 ),
@@ -301,49 +281,32 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 
-  Widget _buildNavItem(
-    int index,
-    IconData selectedIcon,
-    IconData unselectedIcon,
-    String label,
-  ) {
+  Widget _navItem(int index, IconData icon, String label) {
     bool isSelected = _currentIndex == index;
     return GestureDetector(
-      onTap: () {
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeOutCubic,
-        );
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF8DAA91).withOpacity(0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSelected ? selectedIcon : unselectedIcon,
-              color: isSelected ? const Color(0xFF8DAA91) : Colors.white38,
-              size: 24,
-            ),
-            if (isSelected)
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF8DAA91),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
+      onTap: () => _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? const Color(0xFF8DAA91) : Colors.white30,
+            size: 26,
+          ),
+          if (isSelected)
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF8DAA91),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -384,7 +347,7 @@ class CozyAuraBackground extends StatelessWidget {
         ),
         Positioned.fill(
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
+            filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
             child: Container(color: Colors.transparent),
           ),
         ),
