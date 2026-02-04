@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'home_page.dart';
+import '../services/ad_widget.dart';
 
 class Eli5LabScreen extends StatefulWidget {
   const Eli5LabScreen({super.key});

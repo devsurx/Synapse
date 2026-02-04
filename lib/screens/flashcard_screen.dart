@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gemini_flashcard_service.dart';
 
@@ -24,7 +25,6 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
   }
 
   // --- LOGIC: AI GENERATION ---
-  // Inside flashcard_screen.dart
   Future<void> _generateFlashcards() async {
     final prefs = await SharedPreferences.getInstance();
     final pdfText = prefs.getString('saved_pdf_text') ?? "";
@@ -39,16 +39,76 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
       return;
     }
 
-    // Call the real AI service
-    final cards = await FlashcardService.generateFlashcards(pdfText);
-
-    setState(() {
-      _flashcards = cards;
-      _isLoading = false;
-    });
+    try {
+      final cards = await FlashcardService.generateFlashcards(pdfText);
+      setState(() {
+        _flashcards = cards;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _flashcards = [
+          {"front": "Error", "back": "Failed to cultivate cards. Try again."},
+        ];
+        _isLoading = false;
+      });
+    }
   }
 
-  // --- UI: FLASHCARD STACK ---
+  // --- LOGIC: DELETE CARD ---
+  void _deleteCard() {
+    if (_flashcards.isEmpty) return;
+
+    setState(() {
+      _flashcards.removeAt(_currentIndex);
+
+      // Prevent index out of bounds if we delete the last card
+      if (_currentIndex >= _flashcards.length && _currentIndex > 0) {
+        _currentIndex--;
+      }
+      _showAnswer = false;
+    });
+
+    if (_flashcards.isEmpty) {
+      Navigator.pop(context); // Exit if no cards left
+    }
+  }
+
+  void _showDeleteConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          "Prune Card?",
+          style: TextStyle(color: Colors.white, fontSize: 18),
+        ),
+        content: const Text(
+          "This card will be removed from your garden session.",
+          style: TextStyle(color: Colors.white60),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("KEEP", style: TextStyle(color: Colors.white24)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteCard();
+            },
+            child: const Text(
+              "DELETE",
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- UI: MAIN BUILD ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -56,14 +116,30 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
         title: const Text(
-          "Active Recall",
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          "ACTIVE RECALL",
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 4,
+          ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            size: 20,
+            color: Colors.white,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          if (!_isLoading && _flashcards.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.white24),
+              onPressed: _showDeleteConfirmation,
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(
@@ -83,6 +159,7 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
   }
 
   Widget _buildProgressBar() {
+    if (_flashcards.isEmpty) return const SizedBox.shrink();
     double progress = (_currentIndex + 1) / _flashcards.length;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -92,12 +169,17 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
             value: progress,
             backgroundColor: Colors.white10,
             color: const Color(0xFF8DAA91),
+            minHeight: 6,
             borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
-            "${_currentIndex + 1} / ${_flashcards.length}",
-            style: const TextStyle(color: Colors.white24, fontSize: 12),
+            "${_currentIndex + 1} OF ${_flashcards.length}",
+            style: const TextStyle(
+              color: Colors.white24,
+              fontSize: 10,
+              letterSpacing: 2,
+            ),
           ),
         ],
       ),
@@ -105,43 +187,54 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
   }
 
   Widget _buildCardStack() {
-    if (_currentIndex >= _flashcards.length) {
-      return const Center(
-        child: Text("Session Complete! 🎉", style: TextStyle(fontSize: 20)),
-      );
-    }
+    if (_flashcards.isEmpty) return const SizedBox.shrink();
 
-    return GestureDetector(
-      onTap: () => setState(() => _showAnswer = !_showAnswer),
-      child: Center(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            return RotationYTransition(animation: animation, child: child);
-          },
-          child: _showAnswer ? _buildCardFace("back") : _buildCardFace("front"),
+    return Dismissible(
+      key: ValueKey(_flashcards[_currentIndex]),
+      direction: DismissDirection.up,
+      onDismissed: (_) => _deleteCard(),
+      background: Container(
+        alignment: Alignment.bottomCenter,
+        padding: const EdgeInsets.only(bottom: 50),
+        child: const Icon(
+          Icons.delete_sweep_rounded,
+          color: Colors.redAccent,
+          size: 40,
+        ),
+      ),
+      child: GestureDetector(
+        onTap: () => setState(() => _showAnswer = !_showAnswer),
+        child: Center(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return RotationYTransition(animation: animation, child: child);
+            },
+            child: _showAnswer
+                ? _buildCardFace("back")
+                : _buildCardFace("front"),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildCardFace(String side) {
+    bool isFront = side == "front";
     return Container(
       key: ValueKey(side),
-      width: 320,
-      height: 450,
-      padding: const EdgeInsets.all(30),
+      width: MediaQuery.of(context).size.width * 0.85,
+      height: 460,
+      padding: const EdgeInsets.all(35),
       decoration: BoxDecoration(
-        color: side == "front"
-            ? const Color(0xFF1E1E1E)
-            : const Color(0xFF8DAA91),
-        borderRadius: BorderRadius.circular(32),
+        color: isFront ? const Color(0xFF1A1A1A) : const Color(0xFF8DAA91),
+        borderRadius: BorderRadius.circular(40),
         border: Border.all(color: Colors.white.withOpacity(0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 25,
+            offset: const Offset(0, 15),
           ),
         ],
       ),
@@ -150,9 +243,10 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
           _flashcards[_currentIndex][side]!,
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-            color: side == "front" ? Colors.white : Colors.black,
+            fontSize: 22,
+            height: 1.4,
+            fontWeight: FontWeight.w500,
+            color: isFront ? Colors.white : Colors.black,
           ),
         ),
       ),
@@ -161,13 +255,17 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
 
   Widget _buildControls() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: const EdgeInsets.symmetric(horizontal: 60),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _controlButton(Icons.close, Colors.redAccent, () => _nextCard()),
           _controlButton(
-            Icons.check,
+            Icons.close_rounded,
+            Colors.white24,
+            () => _nextCard(),
+          ),
+          _controlButton(
+            Icons.check_rounded,
             const Color(0xFF8DAA91),
             () => _nextCard(),
           ),
@@ -177,16 +275,17 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
   }
 
   Widget _controlButton(IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(50),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
           shape: BoxShape.circle,
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withOpacity(0.2)),
+          color: color.withOpacity(0.05),
         ),
-        child: Icon(icon, color: color, size: 30),
+        child: Icon(icon, color: color, size: 32),
       ),
     );
   }
@@ -198,7 +297,6 @@ class _FlashcardScreenState extends State<FlashcardScreen> {
         _showAnswer = false;
       });
     } else {
-      // End of session logic
       Navigator.pop(context);
     }
   }
@@ -217,16 +315,17 @@ class RotationYTransition extends AnimatedWidget {
   @override
   Widget build(BuildContext context) {
     final animation = listenable as Animation<double>;
-    final rotationValue = lerpDouble(0, 3.14, animation.value)!;
+    final rotationValue = lerpDouble(0, math.pi, animation.value)!;
+
     return Transform(
       alignment: Alignment.center,
       transform: Matrix4.identity()
-        ..setEntry(3, 2, 0.001)
+        ..setEntry(3, 2, 0.001) // Perspective
         ..rotateY(rotationValue),
-      child: rotationValue > 1.57
+      child: rotationValue > (math.pi / 2)
           ? Transform(
               alignment: Alignment.center,
-              transform: Matrix4.rotationY(3.14),
+              transform: Matrix4.rotationY(math.pi),
               child: child,
             )
           : child,

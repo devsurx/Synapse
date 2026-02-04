@@ -51,7 +51,9 @@ class _GardenScreenState extends State<GardenScreen>
   // --- AUDIO SETUP ---
   void _setupAudio() async {
     await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    // await _audioPlayer.setSource(AssetSource('audio/zen.mp3')); // Uncomment when asset is ready
+    await _audioPlayer.setSource(
+      AssetSource('assets/audio/zen.mp3'),
+    ); // Uncomment when asset is ready
   }
 
   // --- DATA LOGIC ---

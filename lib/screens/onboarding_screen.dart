@@ -1,7 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math' as math;
 import '../main.dart';
 
+// --- 1. THE REACTIVE PARTICLE PAINTER ---
+class PollenPainter extends CustomPainter {
+  final double scrollOffset;
+  final List<Offset> basePositions;
+
+  PollenPainter({required this.scrollOffset, required this.basePositions});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF8DAA91).withOpacity(0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+
+    for (int i = 0; i < basePositions.length; i++) {
+      // Calculate responsive movement:
+      // The pollen moves in the opposite direction of the swipe to create "drag"
+      double parallaxEffect = (i % 5 + 1) * 0.2;
+      double dx =
+          (basePositions[i].dx - (scrollOffset * parallaxEffect)) % size.width;
+      double dy = basePositions[i].dy;
+
+      // Ensure particles wrap around the screen smoothly
+      if (dx < 0) dx = size.width + dx;
+
+      canvas.drawCircle(Offset(dx, dy), i % 3 + 1.5, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(PollenPainter oldDelegate) =>
+      oldDelegate.scrollOffset != scrollOffset;
+}
+
+// --- 2. THE UPDATED ONBOARDING SCREEN ---
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -11,37 +46,58 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
+  double _scrollOffset = 0.0;
   int _currentPage = 0;
+
+  // Generate random static positions once
+  final List<Offset> _pollenPositions = List.generate(
+    40,
+    (index) => Offset(
+      math.Random().nextDouble() * 500,
+      math.Random().nextDouble() * 800,
+    ),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to the controller to update particle positions in real-time
+    _pageController.addListener(() {
+      setState(() {
+        _scrollOffset = _pageController.offset;
+      });
+    });
+  }
 
   final List<Map<String, String>> _pages = [
     {
       "title": "Upload & Extract",
       "desc":
-          "Turn your lecture PDFs into knowledge. Powered by Gemini 2.5-Flash, we extract core concepts instantly so you can skip the fluff.",
+          "Turn your lecture PDFs into knowledge. Powered by AI, we extract core concepts instantly so you can skip the fluff.",
       "icon": "📄",
     },
     {
       "title": "ELI5 Laboratory",
       "desc":
-          "Confused by jargon? Our lab uses Gemini 2.5-Flash-Lite to turn complex theories into simple, catchy analogies in seconds.",
+          "Confused by jargon? Our lab turns complex theories into simple, catchy analogies in seconds.",
       "icon": "🧪",
     },
     {
       "title": "Grow Your Garden",
       "desc":
-          "Gamify your focus. Start a Pomodoro timer and watch your digital plant grow. Every minute of focus helps your garden bloom.",
+          "Gamify your focus. Start a Pomodoro timer and watch your digital plant grow. Every minute helps your garden bloom.",
       "icon": "🌱",
     },
     {
       "title": "AI Flashcards",
       "desc":
-          "Master active recall. Generate smart flashcards via Gemini 2.5-Flash-Lite, optimized for quick memory sessions and high RPD.",
+          "Master active recall. Generate smart flashcards optimized for quick memory sessions and high retention.",
       "icon": "🃏",
     },
     {
       "title": "Dynamic Roadmaps",
       "desc":
-          "Never feel lost again. Gemini 2.5-Flash builds custom study plans based on your material, whether you have an hour or a week.",
+          "Never feel lost again. Build custom study plans based on your material, whether you have an hour or a week.",
       "icon": "🗺️",
     },
   ];
@@ -49,11 +105,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _finishOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_first_time', false);
-
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const MainNavigationHolder()),
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
   }
 
@@ -63,6 +118,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       backgroundColor: const Color(0xFF0F0F0F),
       body: Stack(
         children: [
+          // THE POLLEN LAYER
+          Positioned.fill(
+            child: CustomPaint(
+              painter: PollenPainter(
+                scrollOffset: _scrollOffset,
+                basePositions: _pollenPositions,
+              ),
+            ),
+          ),
+
           PageView.builder(
             controller: _pageController,
             onPageChanged: (int page) => setState(() => _currentPage = page),
@@ -70,7 +135,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             itemBuilder: (context, i) => _buildPage(i),
           ),
 
-          // Skip Button
+          // Top Skip Button
           Positioned(
             top: 60,
             right: 20,
@@ -83,7 +148,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
-          // Bottom Navigation
+          // Bottom Nav
           Positioned(
             bottom: 50,
             left: 30,
@@ -105,8 +170,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       _finishOnboarding();
                     } else {
                       _pageController.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOutCubic,
                       );
                     }
                   },
@@ -114,8 +179,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     _currentPage == _pages.length - 1
                         ? Icons.check
                         : Icons.arrow_forward_ios,
-                    color:
-                        Colors.black, // Dark icon on light green looks modern
+                    color: Colors.black,
                   ),
                 ),
               ],
@@ -137,7 +201,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             height: 120,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              // REMOVE 'const' from here because .withOpacity is a method call
               color: const Color(0xFF8DAA91).withOpacity(0.1),
             ),
             alignment: Alignment.center,
@@ -174,12 +237,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _buildDot(int index) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 300),
       margin: const EdgeInsets.only(right: 8),
       height: 8,
       width: _currentPage == index ? 24 : 8,
       decoration: BoxDecoration(
-        // Corrected the color logic - remove 'const' from the conditional branch
         color: _currentPage == index ? const Color(0xFF8DAA91) : Colors.white10,
         borderRadius: BorderRadius.circular(4),
       ),

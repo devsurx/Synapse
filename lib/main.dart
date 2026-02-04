@@ -8,11 +8,24 @@ import 'screens/home_page.dart';
 import 'screens/plan_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/onboarding_screen.dart';
-import 'garden.dart'; // New Import
+import 'screens/splash_screen.dart'; // Using your animated splash now
+import 'garden.dart';
+import 'screens/synapse_error_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await MobileAds.instance.initialize();
+
+  // --- THE SAFETY NET ---
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details); // Still log it to console for debugging
+  };
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return SynapseErrorScreen(details: details);
+  };
+  // ----------------------
+
   runApp(const StudyCoachApp());
 }
 
@@ -22,97 +35,27 @@ class StudyCoachApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Synapse', // Brand name
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFF121212),
+        scaffoldBackgroundColor: const Color(
+          0xFF0F1710,
+        ), // Matching your Splash vibe
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF8DAA91),
           secondary: Color(0xFFD4A373),
         ),
       ),
+      // Set the home to your high-end animated splash screen
       home: const SplashScreen(),
     );
   }
 }
 
-// --- SPLASH SCREEN ---
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
-    _navigateToNext();
-  }
-
-  Future<void> _navigateToNext() async {
-    await Future.delayed(const Duration(seconds: 3));
-    final prefs = await SharedPreferences.getInstance();
-
-    final String? userName = prefs.getString('user_name');
-    final bool isFirstTime = prefs.getBool('is_first_time') ?? true;
-
-    if (!mounted) return;
-
-    if (userName == null || isFirstTime) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainNavigationHolder()),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: CozyAuraBackground(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF8DAA91).withOpacity(0.1),
-                ),
-                child: const Icon(
-                  Icons.spa_rounded,
-                  size: 80,
-                  color: Color(0xFF8DAA91),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                "STUDY COZY",
-                style: TextStyle(
-                  fontSize: 28,
-                  letterSpacing: 6,
-                  fontWeight: FontWeight.w200,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // --- LOGIN SCREEN ---
+// This is shown if no username is found in SplashScreen logic
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -129,9 +72,10 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('user_name', name);
 
       if (!mounted) return;
+      // After getting the name, finally go to the main app
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+        MaterialPageRoute(builder: (context) => const MainNavigationHolder()),
       );
     }
   }
@@ -139,61 +83,103 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: CozyAuraBackground(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Welcome,",
-                style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+      backgroundColor: const Color(0xFF0F1710), // Deep garden dark
+      body: Stack(
+        children: [
+          // Subtle background glow to match the splash
+          Positioned(
+            top: -100,
+            right: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF8DAA91).withOpacity(0.1),
               ),
-              const Text(
-                "What should we call you?",
-                style: TextStyle(fontSize: 18, color: Colors.white54),
-              ),
-              const SizedBox(height: 40),
-              TextField(
-                controller: _nameController,
-                style: const TextStyle(fontSize: 18),
-                decoration: InputDecoration(
-                  hintText: "Your name...",
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  contentPadding: const EdgeInsets.all(20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Welcome,",
+                  style: TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 65,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8DAA91),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
+                const Text(
+                  "What should we call you?",
+                  style: TextStyle(fontSize: 18, color: Colors.white54),
+                ),
+                const SizedBox(height: 40),
+                TextField(
+                  controller: _nameController,
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                  cursorColor: const Color(0xFF8DAA91),
+                  decoration: InputDecoration(
+                    hintText: "Your name...",
+                    hintStyle: const TextStyle(color: Colors.white24),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.05),
+                    contentPadding: const EdgeInsets.all(20),
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF8DAA91),
+                        width: 1,
+                      ),
                     ),
                   ),
-                  onPressed: _handleGetStarted,
-                  child: const Text(
-                    "Continue",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  height: 65,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8DAA91),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: _handleGetStarted,
+                    child: const Text(
+                      "Start Growing",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
+}
+
+Widget _buildBackgroundGlow() {
+  return Positioned.fill(
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+      child: Container(color: Colors.transparent),
+    ),
+  );
 }
 
 // --- MAIN NAVIGATION HOLDER ---
@@ -240,13 +226,13 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
                 onPdfUploaded: (text) =>
                     setState(() => _currentStudyContext = text),
               ),
-              GardenScreen(), // Added Garden here
+              GardenScreen(),
               PlanScreen(studyContext: _currentStudyContext),
               ChatScreen(studyContext: _currentStudyContext),
             ],
           ),
 
-          // Updated Floating Navbar with 4 items
+          // Floating Navbar
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             left: 20,
@@ -267,7 +253,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _navItem(0, Icons.home_rounded, "Home"),
-                      _navItem(1, Icons.yard_rounded, "Garden"), // Garden Icon
+                      _navItem(1, Icons.yard_rounded, "Garden"),
                       _navItem(2, Icons.auto_awesome_mosaic_rounded, "Plan"),
                       _navItem(3, Icons.psychology_rounded, "Tutor"),
                     ],
@@ -308,51 +294,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
             ),
         ],
       ),
-    );
-  }
-}
-
-// --- GLOBAL BACKGROUND ---
-class CozyAuraBackground extends StatelessWidget {
-  final Widget child;
-  const CozyAuraBackground({super.key, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned(
-          top: -100,
-          right: -50,
-          child: Container(
-            width: 400,
-            height: 400,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF8DAA91).withOpacity(0.08),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: -80,
-          left: -80,
-          child: Container(
-            width: 350,
-            height: 350,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFD4A373).withOpacity(0.06),
-            ),
-          ),
-        ),
-        Positioned.fill(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-            child: Container(color: Colors.transparent),
-          ),
-        ),
-        child,
-      ],
     );
   }
 }
