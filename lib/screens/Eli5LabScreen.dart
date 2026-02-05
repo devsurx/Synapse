@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Added for API key retrieval
 import 'dart:math' as math;
 import '../services/ad_widget.dart';
 
@@ -18,7 +19,6 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
   String? _errorType;
 
   late AnimationController _labController;
-  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
 
   @override
   void initState() {
@@ -40,8 +40,14 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
     final input = _inputController.text.trim();
     if (input.isEmpty) return;
 
-    if (_apiKey.isEmpty) {
-      _showSnackBar("API Key missing. Check terminal/launch.json");
+    // --- UPDATED: GET API KEY FROM SHARED PREFERENCES ---
+    final prefs = await SharedPreferences.getInstance();
+    final userApiKey = prefs.getString('gemini_api_key') ?? "";
+
+    if (userApiKey.isEmpty) {
+      _showSnackBar(
+        "API Key missing! Please set it in Settings or Onboarding.",
+      );
       return;
     }
 
@@ -52,7 +58,12 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
     });
 
     try {
-      final model = GenerativeModel(model: 'gemma-3-27b-it', apiKey: _apiKey);
+      // Use the user's provided key and the correct model identifier
+      final model = GenerativeModel(
+        model: 'models/gemma-3-27b-it', // Updated to a stable Gemini model name
+        apiKey: userApiKey,
+      );
+
       final prompt =
           "Explain the following like I'm 5 years old. Use a funny analogy: $input";
       final response = await model.generateContent([Content.text(prompt)]);
@@ -65,18 +76,31 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
       debugPrint("ELI5 ERROR: $e");
       setState(() {
         _isLoading = false;
-        _errorType = e.toString().contains('429') ? "LIMIT" : "GENERAL";
+        // Check for specific API errors (429 is limit, 403 is invalid key)
+        if (e.toString().contains('429')) {
+          _errorType = "LIMIT";
+        } else if (e.toString().contains('403')) {
+          _errorType = "AUTH";
+        } else {
+          _errorType = "GENERAL";
+        }
       });
     }
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF1A1A1A),
+        content: Text(
+          message,
+          style: const TextStyle(color: Color(0xFF8DAA91)),
+        ),
+      ),
+    );
   }
 
-  // --- NEW IMMERSIVE LOADER ---
+  // --- LOADER & UI COMPONENTS REMAIN THE SAME ---
   Widget _buildLabLoader() {
     return Column(
       children: [
@@ -90,7 +114,6 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
               return Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Electron Orbit 1
                   Transform.rotate(
                     angle: _labController.value * 2 * math.pi,
                     child: Container(
@@ -101,13 +124,12 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
                           color: const Color(0xFF8DAA91).withOpacity(0.3),
                           width: 1.5,
                         ),
-                        borderRadius: BorderRadius.all(
+                        borderRadius: const BorderRadius.all(
                           Radius.elliptical(80, 30),
                         ),
                       ),
                     ),
                   ),
-                  // Electron Orbit 2
                   Transform.rotate(
                     angle: -_labController.value * 2 * math.pi + (math.pi / 2),
                     child: Container(
@@ -118,13 +140,12 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
                           color: const Color(0xFF8DAA91).withOpacity(0.3),
                           width: 1.5,
                         ),
-                        borderRadius: BorderRadius.all(
+                        borderRadius: const BorderRadius.all(
                           Radius.elliptical(80, 30),
                         ),
                       ),
                     ),
                   ),
-                  // Nucleus
                   Container(
                     width: 12,
                     height: 12,
@@ -214,10 +235,10 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
     );
   }
 
-  // --- UI Components ---
-
   Widget _buildApologyCard() {
     bool isLimit = _errorType == "LIMIT";
+    bool isAuth = _errorType == "AUTH";
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(32),
@@ -229,13 +250,17 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
       child: Column(
         children: [
           Icon(
-            isLimit ? Icons.hourglass_empty : Icons.wifi_off_rounded,
+            isAuth
+                ? Icons.lock_person
+                : (isLimit ? Icons.hourglass_empty : Icons.wifi_off_rounded),
             color: const Color(0xFF8DAA91),
             size: 48,
           ),
           const SizedBox(height: 20),
           Text(
-            isLimit ? "LAB OVERLOADED" : "CONNECTION HICCUP",
+            isAuth
+                ? "INVALID API KEY"
+                : (isLimit ? "LAB OVERLOADED" : "CONNECTION HICCUP"),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
@@ -245,9 +270,11 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            isLimit
-                ? "The molecular processor is cooling down. Please wait a minute before the next experiment."
-                : "The lab's sensors are offline. Please check your internet connection.",
+            isAuth
+                ? "Your API key seems incorrect. Please update it in the settings."
+                : (isLimit
+                      ? "The molecular processor is cooling down. Please wait a minute."
+                      : "The lab's sensors are offline. Check your internet."),
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white60,
@@ -261,9 +288,6 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF8DAA91),
               foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
             ),
             child: const Text(
               "RETRY EXPERIMENT",

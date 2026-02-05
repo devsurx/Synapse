@@ -1,91 +1,71 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 class FlashcardService {
-  // --- SECURE API KEY LOGIC ---
-  // No more hardcoded keys! This pulls from the --define flag during build/run.
-  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
-
-  /// Generates flashcards from PDF text.
-  /// Throws specific "APOLOGY" strings if something goes wrong.
   static Future<List<Map<String, String>>> generateFlashcards(
     String pdfText,
+    String apiKey,
   ) async {
-    // Safety check for the developer
-    if (_apiKey.isEmpty) {
-      debugPrint(
-        "SECURE ERROR: No API Key found for FlashcardService. Run with --define=GEMINI_API_KEY=your_key",
-      );
-      throw "CONFIG_ERROR";
-    }
-
-    final model = GenerativeModel(
-      model: 'gemini-3-flash-preview',
-      apiKey: _apiKey,
-      generationConfig: GenerationConfig(
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-      ),
-    );
-
-    // SYSTEM PROMPT
-    final prompt =
-        """
-    You are an expert academic tutor. Based ONLY on the following text provided from a PDF, 
-    generate 8 high-quality flashcards for active recall.
-    
-    RULES:
-    1. DO NOT use outside knowledge. 
-    2. ONLY use information found in the text below.
-    3. Format the response as a valid JSON list of objects with "front" and "back" keys.
-    4. Keep questions (front) challenging and answers (back) concise.
-
-    TEXT FROM PDF:
-    $pdfText
-    """;
-
     try {
-      final content = [Content.text(prompt)];
-      final response = await model.generateContent(content);
+      final model = GenerativeModel(
+        model: 'gemini-3-flash-preview',
+        apiKey: apiKey,
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json',
+        ),
+      );
 
-      if (response.text == null || response.text!.isEmpty) {
-        throw "EMPTY_RESPONSE";
+      final safeText = pdfText.length > 7000
+          ? pdfText.substring(0, 7000)
+          : pdfText;
+
+      final prompt =
+          '''
+        Return a JSON array of 5-8 flashcards from this text. 
+        Format: [{"front": "...", "back": "..."}]
+        TEXT: $safeText
+      ''';
+
+      // --- RETRY LOGIC FOR 503 ---
+      GenerateContentResponse response;
+      try {
+        response = await model.generateContent([Content.text(prompt)]);
+      } catch (e) {
+        if (e.toString().contains('503')) {
+          // Wait 2 seconds and try one more time
+          await Future.delayed(const Duration(seconds: 2));
+          response = await model.generateContent([Content.text(prompt)]);
+        } else {
+          rethrow;
+        }
       }
+      // ---------------------------
 
-      // Clean the response (remove Markdown JSON blocks if present)
-      String cleanJson = response.text!
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
+      final rawText = response.text;
+      if (rawText == null || rawText.isEmpty) throw Exception("AI_SILENCE");
 
-      // Parse JSON
-      List<dynamic> decoded = jsonDecode(cleanJson);
-
+      final List<dynamic> decoded = jsonDecode(rawText);
       return decoded
           .map(
             (item) => {
-              "front": item["front"].toString(),
-              "back": item["back"].toString(),
+              "front": item["front"]?.toString() ?? "N/A",
+              "back": item["back"]?.toString() ?? "N/A",
             },
           )
           .toList();
     } catch (e) {
-      // LOGIC: Convert technical errors into friendly constants for the UI
-      String errorStr = e.toString().toLowerCase();
+      final errorStr = e.toString();
 
-      if (errorStr.contains('429') || errorStr.contains('quota')) {
-        // UI will catch this and show: "I'm a bit overwhelmed... give me a minute to catch my breath."
-        throw "LIMIT_REACHED";
-      } else if (errorStr.contains('network') || errorStr.contains('socket')) {
-        // UI will catch this and show: "Mind checking your internet?"
-        throw "OFFLINE";
-      } else {
-        debugPrint("Flashcard Service Error: $e");
-        throw "GENERAL_FAILURE";
+      // Categorize the errors for the UI
+      if (errorStr.contains('429')) {
+        throw Exception("LIMIT_REACHED");
+      } else if (errorStr.contains('503')) {
+        throw Exception("SERVER_OVERLOAD");
+      } else if (errorStr.contains('403') || errorStr.contains('400')) {
+        throw Exception("INVALID_KEY");
       }
+
+      rethrow;
     }
   }
 }

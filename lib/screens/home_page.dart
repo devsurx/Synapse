@@ -4,88 +4,382 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 import 'dart:ui';
 
+// Internal App Imports
 import '../services/pdf_service.dart';
 import 'flashcard_screen.dart';
 import 'Eli5LabScreen.dart';
-import '../garden.dart';
-import '../main.dart';
 
-// --- 1. LEVEL UP OVERLAY ---
-class LevelUpOverlay extends StatelessWidget {
-  final int newLevel;
-  final VoidCallback onDismiss;
+// --- NEW IMMERSIVE WRAPPER ---
+class ImmersiveWrapper extends StatelessWidget {
+  final Widget child;
+  final String? title;
+  const ImmersiveWrapper({super.key, required this.child, this.title});
 
-  const LevelUpOverlay({
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF08080A),
+      appBar: title != null
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: Text(
+                title!,
+                style: const TextStyle(
+                  letterSpacing: 3,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              centerTitle: true,
+            )
+          : null,
+      body: Stack(
+        children: [
+          Positioned(
+            top: -100,
+            right: -50,
+            child: _blurOrb(300, const Color(0xFF8DAA91).withOpacity(0.12)),
+          ),
+          Positioned(
+            bottom: -50,
+            left: -50,
+            child: _blurOrb(250, const Color(0xFFD4A373).withOpacity(0.08)),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _blurOrb(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
+        child: Container(),
+      ),
+    );
+  }
+}
+
+// --- UNIVERSAL GLASS CONTAINER ---
+Widget glassBox({
+  required Widget child,
+  EdgeInsets? padding,
+  VoidCallback? onTap,
+  double blur = 15,
+}) {
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(22),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
+          ),
+          child: child,
+        ),
+      ),
+    ),
+  );
+}
+
+// --- 1. SETTINGS SCREEN ---
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final TextEditingController _apiController = TextEditingController();
+  bool _isObscured = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadKey();
+  }
+
+  Future<void> _loadKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(
+      () => _apiController.text = prefs.getString('gemini_api_key') ?? "",
+    );
+  }
+
+  Future<void> _saveKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('gemini_api_key', _apiController.text.trim());
+    if (mounted) {
+      HapticFeedback.mediumImpact();
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ImmersiveWrapper(
+      title: "SYSTEM CONFIG",
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          children: [
+            glassBox(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _apiController,
+                obscureText: _isObscured,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: "GEMINI_API_CORE",
+                  labelStyle: const TextStyle(
+                    color: Color(0xFF8DAA91),
+                    fontSize: 10,
+                    letterSpacing: 2,
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _isObscured ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.white24,
+                    ),
+                    onPressed: () => setState(() => _isObscured = !_isObscured),
+                  ),
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+            const Spacer(),
+            ElevatedButton(
+              onPressed: _saveKey,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8DAA91),
+                minimumSize: const Size(double.infinity, 60),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: const Text(
+                "INITIALIZE SAVE",
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- 2. UPDATED GLOBAL SYNC PORTAL ---
+class GlobalSyncPortal extends StatefulWidget {
+  final Function(String, String) onPdfUploaded; // Updated to include filename
+  final Function(double) onExpGain;
+  const GlobalSyncPortal({
     super.key,
-    required this.newLevel,
-    required this.onDismiss,
+    required this.onPdfUploaded,
+    required this.onExpGain,
+  });
+
+  @override
+  State<GlobalSyncPortal> createState() => _GlobalSyncPortalState();
+}
+
+class _GlobalSyncPortalState extends State<GlobalSyncPortal> {
+  bool _loading = false;
+
+  Future<void> _syncPdf() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (result != null) {
+      setState(() => _loading = true);
+      try {
+        String path = result.files.single.path!;
+        String fileName = result.files.single.name;
+        String text = await PdfService.extractText(path);
+
+        widget.onPdfUploaded(text, fileName);
+        widget.onExpGain(0.4);
+
+        if (mounted) Navigator.pop(context);
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      } finally {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ImmersiveWrapper(
+      title: "GLOBAL SYNC",
+      child: Center(
+        child: _loading
+            ? const CircularProgressIndicator(color: Color(0xFF8DAA91))
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  glassBox(
+                    padding: const EdgeInsets.all(40),
+                    child: const Icon(
+                      Icons.hub_outlined,
+                      size: 60,
+                      color: Color(0xFF8DAA91),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    "ESTABLISHING NEURAL LINK",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "Upload PDF to sync across all labs",
+                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                  ),
+                  const SizedBox(height: 40),
+                  glassBox(
+                    onTap: _syncPdf,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 15,
+                    ),
+                    child: const Text(
+                      "START SYNC",
+                      style: TextStyle(
+                        color: Color(0xFF8DAA91),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+// --- 3. VIEW COPY PORTAL & RESULT SCREEN ---
+class ViewCopyPortal extends StatefulWidget {
+  const ViewCopyPortal({super.key});
+  @override
+  State<ViewCopyPortal> createState() => _ViewCopyPortalState();
+}
+
+class _ViewCopyPortalState extends State<ViewCopyPortal> {
+  bool _loading = false;
+
+  Future<void> _pickAndView() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (result != null) {
+      setState(() => _loading = true);
+      String text = await PdfService.extractText(result.files.single.path!);
+      setState(() => _loading = false);
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResultViewScreen(
+              text: text,
+              fileName: result.files.single.name,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ImmersiveWrapper(
+      title: "SANDBOX VIEW",
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.document_scanner_outlined,
+              size: 60,
+              color: Colors.white24,
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "LOCAL EXTRACTION",
+              style: TextStyle(color: Colors.white54, letterSpacing: 2),
+            ),
+            const SizedBox(height: 40),
+            _loading
+                ? const CircularProgressIndicator()
+                : glassBox(
+                    onTap: _pickAndView,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 30,
+                      vertical: 15,
+                    ),
+                    child: const Text(
+                      "SELECT PDF",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ResultViewScreen extends StatelessWidget {
+  final String text;
+  final String fileName;
+  const ResultViewScreen({
+    super.key,
+    required this.text,
+    required this.fileName,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black87,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: InkWell(
-          onTap: onDismiss,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TweenAnimationBuilder(
-                  duration: const Duration(milliseconds: 1000),
-                  tween: Tween<double>(begin: 0, end: 1),
-                  curve: Curves.elasticOut,
-                  builder: (context, double value, child) {
-                    return Transform.scale(
-                      scale: value,
-                      child: const Text("🌟", style: TextStyle(fontSize: 120)),
-                    );
-                  },
-                ),
-                const SizedBox(height: 30),
-                const Text(
-                  "NEW LEVEL REACHED",
-                  style: TextStyle(
-                    color: Color(0xFF8DAA91),
-                    letterSpacing: 5,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  "LEVEL $newLevel",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 56,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 30,
-                    vertical: 15,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white24),
-                    borderRadius: BorderRadius.circular(40),
-                  ),
-                  child: const Text(
-                    "TAP TO CONTINUE",
-                    style: TextStyle(
-                      color: Colors.white54,
-                      letterSpacing: 1.5,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
+    return ImmersiveWrapper(
+      title: fileName.toUpperCase(),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: glassBox(
+          padding: const EdgeInsets.all(20),
+          child: SelectableText(
+            text,
+            style: const TextStyle(
+              color: Colors.white70,
+              height: 1.6,
+              fontSize: 13,
             ),
           ),
         ),
@@ -94,11 +388,10 @@ class LevelUpOverlay extends StatelessWidget {
   }
 }
 
-// --- 2. HOME PAGE ---
+// --- 4. REVAMPED HOME PAGE WITH PDF STATUS ---
 class HomePage extends StatefulWidget {
   final String userName;
   final Function(String) onPdfUploaded;
-
   const HomePage({
     super.key,
     required this.userName,
@@ -110,84 +403,67 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool _isExtracting = false;
   bool _showLevelUp = false;
   List<String> _todos = [];
-  String? _fileName;
   List<double> _weeklyPoints = [2, 5, 8, 4, 9, 6, 3];
-
-  // Synced Garden Stats
   int _gardenLevel = 1;
   double _gardenExp = 0.0;
-
-  late Timer _timeTimer;
-  String _currentTime = "";
-  String _greeting = "";
+  String? _activePdfName;
 
   @override
   void initState() {
     super.initState();
     _loadAllData();
-    _updateTime();
-    _timeTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      _updateTime();
-    });
-  }
-
-  @override
-  void dispose() {
-    _timeTimer.cancel();
-    super.dispose();
-  }
-
-  void _updateTime() {
-    final now = DateTime.now();
-    final hour = now.hour;
-    setState(() {
-      _currentTime = DateFormat('h:mm a').format(now);
-      if (hour < 12) {
-        _greeting = "GOOD MORNING";
-      } else if (hour < 17) {
-        _greeting = "GOOD AFTERNOON";
-      } else {
-        _greeting = "GOOD EVENING";
-      }
-    });
   }
 
   Future<void> _loadAllData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _todos = prefs.getStringList('todos') ?? [];
-      _fileName = prefs.getString('current_file_name');
       _gardenLevel = prefs.getInt('garden_level') ?? 1;
       _gardenExp = prefs.getDouble('garden_exp') ?? 0.0;
+      _activePdfName = prefs.getString('active_pdf_name');
       List<String>? savedPoints = prefs.getStringList('weekly_points');
-      if (savedPoints != null) {
+      if (savedPoints != null)
         _weeklyPoints = savedPoints.map((e) => double.parse(e)).toList();
-      }
     });
   }
 
-  // Unified EXP method used by Todos and PDF uploads
+  void _handleSyncUpload(String text, String fileName) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Save the filename for the UI
+    await prefs.setString('active_pdf_name', fileName);
+
+    // CRITICAL: Save the actual extracted text for the Flashcard Screen
+    await prefs.setString('global_synced_pdf', text);
+
+    setState(() {
+      _activePdfName = fileName;
+    });
+
+    // Keep your existing callback if needed
+    widget.onPdfUploaded(text);
+
+    debugPrint("GLOBAL SYNC COMPLETE: Saved ${text.length} characters.");
+  }
+
   Future<void> _addExp(double amount) async {
     final prefs = await SharedPreferences.getInstance();
     int todayIndex = DateTime.now().weekday - 1;
-
     double newExp = _gardenExp + amount;
     int newLevel = _gardenLevel;
 
     if (newExp >= 1.0) {
-      newExp = newExp - 1.0;
+      newExp -= 1.0;
       newLevel++;
       setState(() => _showLevelUp = true);
       HapticFeedback.heavyImpact();
-    } else {
-      HapticFeedback.lightImpact();
     }
 
     setState(() {
-      _weeklyPoints[todayIndex] += (amount * 10);
+      _weeklyPoints[todayIndex] = (_weeklyPoints[todayIndex] + (amount * 10))
+          .clamp(0, 15);
       _gardenExp = newExp;
       _gardenLevel = newLevel;
     });
@@ -202,265 +478,312 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          SafeArea(
-            child: SingleChildScrollView(
+    return ImmersiveWrapper(
+      child: SafeArea(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 20),
                   _buildTopBar(),
-                  const SizedBox(height: 20),
-                  // Clickable Garden Status
-                  GestureDetector(
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const GardenScreen(),
-                        ),
-                      );
-                      _loadAllData(); // Refresh when returning
-                    },
-                    child: _buildGardenStatus(),
-                  ),
                   const SizedBox(height: 30),
-                  _buildBentoHero(),
+                  _buildNeonExpBar(),
+
+                  // --- ACTIVE PDF STATUS ---
+                  if (_activePdfName != null) ...[
+                    const SizedBox(height: 24),
+                    _buildActivePdfCard(),
+                  ],
+
+                  const SizedBox(height: 40),
+                  _sectionHeader("COGNITIVE LAB"),
                   const SizedBox(height: 16),
-                  _buildFeatureRow(),
-                  const SizedBox(height: 32),
-                  _buildGlassCard(
-                    title: "WEEKLY MOMENTUM",
-                    child: _buildChart(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _bentoTile(
+                          "ELI5",
+                          Icons.bolt,
+                          const Color(0xFF8DAA91),
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const Eli5LabScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _bentoTile(
+                          "FLASHCARDS",
+                          Icons.layers,
+                          const Color(0xFFD4A373),
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const FlashcardScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+
                   const SizedBox(height: 32),
-                  _buildGlassCard(
-                    title: "DAILY MISSIONS",
-                    child: Column(
-                      children: [
-                        _buildTodoInput(),
-                        const SizedBox(height: 16),
-                        _buildTodoList(),
-                      ],
+                  _sectionHeader("DATA INGESTION"),
+                  const SizedBox(height: 16),
+                  _portalTile(
+                    "UPLOAD PDF",
+                    "Updates Core Labs",
+                    Icons.sync_alt_rounded,
+                    const Color(0xFF8DAA91),
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GlobalSyncPortal(
+                          // Pass our updated handler here
+                          onPdfUploaded: _handleSyncUpload,
+                          onExpGain: _addExp,
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 120),
+                  const SizedBox(height: 12),
+                  _portalTile(
+                    "PDF TO TEXT",
+                    "Extract Only",
+                    Icons.security_rounded,
+                    Colors.white24,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ViewCopyPortal(),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+                  _sectionHeader("NEURAL MOMENTUM"),
+                  const SizedBox(height: 16),
+                  glassBox(
+                    padding: const EdgeInsets.all(24),
+                    child: _buildChart(),
+                  ),
+
+                  const SizedBox(height: 32),
+                  _sectionHeader("DAILY MISSIONS"),
+                  const SizedBox(height: 16),
+                  glassBox(
+                    padding: const EdgeInsets.all(16),
+                    child: _buildTodoList(),
+                  ),
+
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
-          ),
-          if (_showLevelUp)
-            LevelUpOverlay(
-              newLevel: _gardenLevel,
-              onDismiss: () => setState(() => _showLevelUp = false),
-            ),
-        ],
+            if (_showLevelUp)
+              LevelUpOverlay(
+                newLevel: _gardenLevel,
+                onDismiss: () => setState(() => _showLevelUp = false),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  // --- WIDGET COMPONENTS ---
-
-  Widget _buildTopBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  _greeting,
-                  style: const TextStyle(
-                    color: Color(0xFF8DAA91),
-                    fontSize: 10,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  "•  $_currentTime",
-                  style: const TextStyle(
-                    color: Colors.white24,
-                    fontSize: 10,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.userName,
-              style: const TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-        GestureDetector(
-          onTap: _showLogoutDialog,
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
-            ),
-            child: const Icon(
-              Icons.logout_rounded,
-              color: Colors.white24,
-              size: 22,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGardenStatus() {
-    return _glassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+  Widget _buildActivePdfCard() {
+    return glassBox(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          const Text("🌱", style: TextStyle(fontSize: 24)),
-          const SizedBox(width: 15),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFF8DAA91),
+              boxShadow: [BoxShadow(color: Color(0xFF8DAA91), blurRadius: 6)],
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "GARDEN LEVEL $_gardenLevel",
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      "${(_gardenExp * 100).toInt()}%",
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.white38,
-                      ),
-                    ),
-                  ],
+                Text(
+                  "ACTIVE NEURAL SOURCE",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 8,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: _gardenExp,
-                  backgroundColor: Colors.white10,
-                  color: const Color(0xFF8DAA91),
-                  borderRadius: BorderRadius.circular(10),
-                  minHeight: 6,
+                Text(
+                  _activePdfName!.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 15),
-          const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white24),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBentoHero() {
-    return _glassContainer(
-      height: 140,
-      gradient: LinearGradient(
-        colors: [
-          const Color(0xFF8DAA91).withOpacity(0.4),
-          const Color(0xFF8DAA91).withOpacity(0.05),
-        ],
-      ),
-      onTap: _pickFile,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            _isExtracting ? Icons.sync : Icons.auto_awesome,
-            color: Colors.white,
-            size: 40,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _fileName ?? "Upload PDF to Study",
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Colors.white,
-            ),
-          ),
-          const Text(
-            "AI Analysis for Quizzes & Flashcards",
-            style: TextStyle(fontSize: 11, color: Colors.white70),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.white24, size: 16),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('active_pdf_name');
+              await prefs.remove('global_synced_pdf'); // Add this line
+              setState(() => _activePdfName = null);
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFeatureRow() {
+  Widget _sectionHeader(String title) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: Colors.white.withOpacity(0.3),
+        fontSize: 10,
+        letterSpacing: 4,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Expanded(
-          child: _featureButton(
-            "FLASHCARDS",
-            Icons.style_rounded,
-            const Color(0xFFD4A373),
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const FlashcardScreen()),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "OPERATOR",
+              style: TextStyle(
+                color: Color(0xFF8DAA91),
+                fontSize: 10,
+                letterSpacing: 2,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
+            Text(
+              widget.userName.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: -1,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _featureButton(
-            "ELI5 LAB",
-            Icons.biotech_rounded,
-            const Color(0xFF8DAA91),
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const Eli5LabScreen()),
-            ),
+        glassBox(
+          padding: const EdgeInsets.all(10),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+          ),
+          child: const Icon(
+            Icons.settings_input_component_rounded,
+            color: Colors.white70,
+            size: 20,
           ),
         ),
       ],
     );
   }
 
-  Widget _featureButton(
+  Widget _buildNeonExpBar() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "LEVEL $_gardenLevel",
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              "${(_gardenExp * 100).toInt()}% SYNCED",
+              style: const TextStyle(
+                color: Color(0xFF8DAA91),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Stack(
+          children: [
+            Container(
+              height: 6,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 800),
+              height: 6,
+              width: (MediaQuery.of(context).size.width - 48) * _gardenExp,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8DAA91).withOpacity(0.4),
+                    blurRadius: 10,
+                  ),
+                ],
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8DAA91), Color(0xFFA3C4BC)],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _bentoTile(
     String title,
     IconData icon,
     Color color,
     VoidCallback onTap,
   ) {
-    return _glassContainer(
+    return glassBox(
       onTap: onTap,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.symmetric(vertical: 30),
+      child: Column(
         children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
+          Icon(icon, color: color, size: 32),
+          const SizedBox(height: 12),
           Text(
             title,
             style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
               color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
             ),
           ),
         ],
@@ -468,206 +791,58 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildTodoInput() {
-    return TextField(
-      style: const TextStyle(color: Colors.white),
-      onSubmitted: (v) {
-        if (v.isNotEmpty) {
-          setState(() => _todos.add(v));
-          _saveTodos();
-        }
-      },
-      decoration: InputDecoration(
-        hintText: "Add mission...",
-        hintStyle: const TextStyle(color: Colors.white24),
-        prefixIcon: const Icon(Icons.add, color: Color(0xFF8DAA91)),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTodoList() {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _todos.length,
-      itemBuilder: (context, i) => Dismissible(
-        key: Key(_todos[i] + i.toString()),
-        onDismissed: (_) {
-          setState(() => _todos.removeAt(i));
-          _addExp(0.15); // Completing a todo gives 15% progress
-          _saveTodos();
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
+  Widget _portalTile(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return glassBox(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 20),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.circle_outlined,
-                size: 20,
-                color: Colors.white24,
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  _todos[i],
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.2),
+                  fontSize: 10,
                 ),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  // --- HELPERS ---
-
-  Future<void> _saveTodos() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('todos', _todos);
-  }
-
-  Future<void> _pickFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
-    if (result != null) {
-      setState(() => _isExtracting = true);
-      String text = await PdfService.extractText(result.files.single.path!);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('saved_pdf_text', text);
-      await prefs.setString('current_file_name', result.files.single.name);
-      widget.onPdfUploaded(text);
-      setState(() {
-        _fileName = result.files.single.name;
-        _isExtracting = false;
-      });
-      _addExp(0.3); // Uploading a PDF gives 30% progress
-    }
-  }
-
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text("Logout?", style: TextStyle(color: Colors.white)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "CANCEL",
-              style: TextStyle(color: Colors.white24),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('isLoggedIn', false);
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-                (route) => false,
-              );
-            },
-            child: const Text(
-              "LOGOUT",
-              style: TextStyle(color: Color(0xFF8DAA91)),
-            ),
+          const Spacer(),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: Colors.white.withOpacity(0.1),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _glassContainer({
-    required Widget child,
-    double? height,
-    EdgeInsets? padding,
-    VoidCallback? onTap,
-    Gradient? gradient,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            height: height,
-            width: double.infinity,
-            padding: padding ?? const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.03),
-              gradient: gradient,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
-            ),
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassCard({required String title, required Widget child}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            letterSpacing: 2,
-            fontSize: 10,
-            color: Colors.white30,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        _glassContainer(child: child, padding: const EdgeInsets.all(20)),
-      ],
     );
   }
 
   Widget _buildChart() {
     return SizedBox(
-      height: 150,
+      height: 100,
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
           maxY: 15,
-          titlesData: FlTitlesData(
-            show: true,
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (v, m) => Text(
-                  ['M', 'T', 'W', 'T', 'F', 'S', 'S'][v.toInt()],
-                  style: const TextStyle(color: Colors.white24, fontSize: 10),
-                ),
-              ),
-            ),
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-          ),
+          titlesData: const FlTitlesData(show: false),
           gridData: const FlGridData(show: false),
           borderData: FlBorderData(show: false),
           barGroups: List.generate(
@@ -677,11 +852,108 @@ class _HomePageState extends State<HomePage> {
               barRods: [
                 BarChartRodData(
                   toY: _weeklyPoints[i],
-                  color: i == DateTime.now().weekday - 1
-                      ? const Color(0xFF8DAA91)
-                      : Colors.white10,
-                  width: 14,
-                  borderRadius: BorderRadius.circular(4),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8DAA91), Colors.transparent],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  width: 12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTodoList() {
+    return Column(
+      children: [
+        TextField(
+          onSubmitted: (v) {
+            if (v.isNotEmpty) {
+              setState(() => _todos.add(v));
+              _addExp(0.05);
+            }
+          },
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          decoration: const InputDecoration(
+            hintText: "ADD MISSION...",
+            hintStyle: TextStyle(
+              color: Colors.white24,
+              letterSpacing: 2,
+              fontSize: 10,
+            ),
+            border: InputBorder.none,
+            prefixIcon: Icon(Icons.add, color: Color(0xFF8DAA91), size: 18),
+          ),
+        ),
+        ..._todos.map(
+          (e) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              e,
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            leading: const Icon(
+              Icons.radio_button_off_rounded,
+              color: Colors.white10,
+              size: 18,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// --- LEVEL UP OVERLAY ---
+class LevelUpOverlay extends StatelessWidget {
+  final int newLevel;
+  final VoidCallback onDismiss;
+  const LevelUpOverlay({
+    super.key,
+    required this.newLevel,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: Container(
+        color: Colors.black54,
+        child: InkWell(
+          onTap: onDismiss,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "EVOLUTION COMPLETE",
+                  style: TextStyle(
+                    color: Color(0xFF8DAA91),
+                    letterSpacing: 5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  "LVL $newLevel",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 80,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const Text(
+                  "TAP TO CONTINUE",
+                  style: TextStyle(
+                    color: Colors.white24,
+                    fontSize: 10,
+                    letterSpacing: 2,
+                  ),
                 ),
               ],
             ),

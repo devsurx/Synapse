@@ -49,6 +49,9 @@ dependencies:
   google_mobile_ads: ^5.0.0 # Standard for 2026
   http: ^1.1.0
   flutter_markdown: ^0.7.3+1
+  google_mlkit_text_recognition: ^0.13.0
+  image_picker: ^1.0.7
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
