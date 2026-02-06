@@ -32,7 +32,7 @@ android {
 
     buildTypes {
         getByName("release") {
-            // Note the '=' signs and parentheses required by Kotlin DSL
+            // Note the '=' signs and parentheses required by Kotlin DSLwka
             isMinifyEnabled = true
             isShrinkResources = true
             

@@ -67,8 +67,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       "icon": "🧪",
     },
     {
+      "title": "Feynman Lab",
+      "desc":
+          "The best way to learn is to teach. Explain concepts to our AI to find gaps in your knowledge.",
+      "icon": "👨‍🏫",
+    },
+    {
+      "title": "Assessment Lab",
+      "desc":
+          "Generate 10-question tests from your documents and get graded instantly by AI.",
+      "icon": "📝",
+    },
+    {
       "title": "Smart Flashcards",
-      "desc": "Master subjects through spaced repetition.",
+      "desc": "Master subjects through automated Spaced Repetition tracking.",
       "icon": "🗂️",
     },
     {
