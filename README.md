@@ -33,11 +33,12 @@ Check your **Neural History** to see a 14-day map of your progress. It’s a min
 
 ### App Screenshots
 <p align="center">
-  <img src="assets/home1.jpeg" width="350">
-  <img src="assets/flashcard1.jpeg" width="350">
-  <img src="assets/eli5.jpeg" width="350">
-  <img src="assets/garden.jpeg" width="350">
-  <img src="assets/plan.jpeg" width="350">
+  <img src="assets/home1.jpeg" width="30%">
+  <img src="assets/flashcard1.jpeg" width="30%">
+  <img src="assets/eli5.jpeg" width="30%">
+  <img src="assets/feynman.jpeg" width="350">
+  <img src="assets/garden.jpeg" width="30%">
+  <img src="assets/plan.jpeg" width="30%">
 </p>
 
 ---
@@ -54,3 +55,4 @@ Since you've got the **APK**, you’re nearly there. Just a couple of things to 
 ---
 
 > *Your focus is the most valuable thing you own. Plant it wisely.*
+
