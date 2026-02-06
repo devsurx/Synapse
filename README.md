@@ -20,13 +20,25 @@ Your focus now has a visual legacy. We’ve introduced a hierarchy that rewards 
 
 ---
 
+## 🧠 The Cognitive Toolkit
+
+Beyond the garden, Synapse equips you with powerful modules to transform information into long-term knowledge:
+
+* **Feynman Tab:** Master any topic by teaching it. Use this space to break down complex concepts into your own words—the ultimate test of true understanding.
+* **ELI5 Tab:** Strip away the jargon. This module helps you simplify difficult ideas so clearly that "Even Like I'm 5," anyone could understand them.
+* **Flashcard Tab:** Combat the forgetting curve. Create and review digital decks to lock in facts through active recall.
+* **Chat Tab:** Your neural co-pilot. Use this space to brainstorm, query, and reflect on your learning journey in real-time.
+* **Planner Tab:** Map out your growth. Organize your daily deep-work sessions and set the intentions that will fuel your garden.
+
+---
+
 ## ✨ Why it Feels Different
 
 ### 🌬️ A Breathing Ecosystem
 The garden doesn't just sit there; it breathes. The **Aura** behind your plant pulses with a steady, calming rhythm, encouraging you to match your own breathing to the timer. Tiny **Pollen Orbitals** drift around the core like fireflies, giving the app a kinetic, "alive" energy.
 
 ### 🥀 Real Stakes (The Wither Mechanic)
-Focus is a commitment. If you abandon a mission halfway through, your garden will **Wither**. It’s a gentle, visual reminder that your consistency matters. But don't worry—a new session always brings the green back.
+Focus is a commitment. If you abandon a mission halfway through, your garden will **Wilted**. It’s a gentle, visual reminder that your consistency matters. But don't worry—a new session always brings the green back.
 
 ### 📊 Your Neural Story
 Check your **Neural History** to see a 14-day map of your progress. It’s a minimalist dot-matrix that visualizes your "Wins" and "Losses," making it easy to see your focus streaks at a glance.
@@ -55,5 +67,3 @@ Since you've got the **APK**, you’re nearly there. Just a couple of things to 
 ---
 
 > *Your focus is the most valuable thing you own. Plant it wisely.*
-
-
