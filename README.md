@@ -15,10 +15,23 @@ The centerpiece of this update is a fully immersive weather engine. We didn't ju
 - **Audio Immersion:** A lush, high-fidelity looping rain soundscape (`rain.mp3`) that drowns out environmental distractions.
 - **Smart Weather:** The rain is tied to your biology—it clears the moment your focus session ends, signaling a mental "reset" and bringing the sunlight back for your break.
 
-### 🎖️ The Path of Evolution (New Ranks)
-Your focus now has a visual legacy. We’ve introduced a hierarchy that rewards your consistency:
-- **Rank Tiers:** Start as a humble **Neural Sprout** and work your way toward the legendary **Eternal Oak**.
-- **Living Colors:** Watch the UI shift from a soft **Garden Green** to a deep **Neural Purple**, and eventually a prestigious **Eternal Gold** as you hit higher levels.
+---
+
+## 🎖️ The Rank Hierarchy
+Progression in Synapse is visual and prestigious. As you complete missions, your rank title and the primary UI accents change color to reflect your dedication.
+
+| Level | Rank Title | UI Color Theme | Aesthetic |
+| :--- | :--- | :--- | :--- |
+| **Lvl 1-4** | **NEURAL SPROUT** | 🌱 Sprout Green | The beginning of growth. Faint, soft glow. |
+| **Lvl 5-9** | **SYNERGIC STEM** | 🧊 Focus Blue | Strengthening connections. Clearer, sharper aura. |
+| **Lvl 10-19** | **COGNITIVE CANOPY** | 🟣 Neural Purple | Deep mastery. Intense, vibrant energy. |
+| **Lvl 20+** | **THE ETERNAL OAK** | 👑 Eternal Gold | Peak performance. A legendary, golden shimmer. |
+
+### ⚔️ Compete with Friends
+Who has the strongest focus? While Synapse is a private sanctuary, you can turn your growth into a competition:
+* **Screenshot Battles:** Share your **Neural History** grid. A sea of green dots is the ultimate proof of discipline.
+* **Level Racing:** Compare your **Garden Lvl** in the header. The higher the level, the more hours of deep work you’ve clocked.
+* **The Wilt Challenge:** See who can go the longest without triggering the **Withered (🥀)** state. Once you hit *The Eternal Oak*, you’ve reached the top—see who can get there first!
 
 ---
 
