@@ -9,9 +9,11 @@ Forget cold, mechanical timers. **Synapse** is a living workspace designed to he
 v0.4 is the **Atmospheric Update**, designed to pull you out of a busy room and into a calm, private sanctuary.
 
 ### 🌧️ The Rain Sanctuary
-The centerpiece of this update. We didn't just add "noise"—we built a storm. 
-- **Organic Downpour:** A 3D-layered rain system that actually has depth. Some drops fall fast and close, others are distant and misty, creating a "window" effect on your screen.
-- **Audio Immersion:** A lush, looping rain soundscape (`rain.mp3`) that drowns out the world. It’s smart, too—the rain clears the moment your session ends, signaling a mental "reset."
+The centerpiece of this update is a fully immersive weather engine. We didn't just add "noise"—we built a sensory storm designed to induce a flow state.
+- **Organic Downpour:** Most apps use a flat overlay. Synapse features a 3D-layered rain system with depth. Some drops fall fast and close, others are distant and misty, creating the sensation of looking through a window into a forest.
+- **Natural Physics:** The raindrops feature a slight "wind-slant" and randomized timing, ensuring the visual never feels repetitive or robotic.
+- **Audio Immersion:** A lush, high-fidelity looping rain soundscape (`rain.mp3`) that drowns out environmental distractions.
+- **Smart Weather:** The rain is tied to your biology—it clears the moment your focus session ends, signaling a mental "reset" and bringing the sunlight back for your break.
 
 ### 🎖️ The Path of Evolution (New Ranks)
 Your focus now has a visual legacy. We’ve introduced a hierarchy that rewards your consistency:
@@ -22,13 +24,13 @@ Your focus now has a visual legacy. We’ve introduced a hierarchy that rewards 
 
 ## 🧠 The Cognitive Toolkit
 
-Beyond the garden, Synapse equips you with powerful modules to transform information into long-term knowledge:
+Synapse isn't just a timer; it's a laboratory for your mind. Beyond the garden, you’ll find five specialized modules designed to turn "studying" into "mastering":
 
-* **Feynman Tab:** Master any topic by teaching it. Use this space to break down complex concepts into your own words—the ultimate test of true understanding.
-* **ELI5 Tab:** Strip away the jargon. This module helps you simplify difficult ideas so clearly that "Even Like I'm 5," anyone could understand them.
-* **Flashcard Tab:** Combat the forgetting curve. Create and review digital decks to lock in facts through active recall.
-* **Chat Tab:** Your neural co-pilot. Use this space to brainstorm, query, and reflect on your learning journey in real-time.
-* **Planner Tab:** Map out your growth. Organize your daily deep-work sessions and set the intentions that will fuel your garden.
+* **Feynman Tab:** Inspired by the legendary physicist Richard Feynman. This module is based on the idea that *if you can’t explain it simply, you don't understand it.* Use this space to write out concepts as if you were teaching them to a class. It forces you to find the gaps in your knowledge.
+* **ELI5 Tab (Explain Like I'm Five):** The ultimate test of clarity. Strip away the jargon and the complex "filler" words. This module helps you boil down massive ideas into their most basic, undeniable truths.
+* **Flashcard Tab:** Combat the "Forgetting Curve." Use this for active recall—the most scientifically proven way to move information from short-term memory into long-term storage.
+* **Chat Tab:** Your Neural Co-pilot. Whether you need to brainstorm a project, query a difficult fact, or just reflect on what you've learned today, the Chat tab is your space for real-time intellectual dialogue.
+* **Planner Tab:** Intention is the seed of focus. Use the Planner to map out your day, set your primary objectives, and decide exactly what you are going to nourish in your garden today.
 
 ---
 
@@ -38,7 +40,7 @@ Beyond the garden, Synapse equips you with powerful modules to transform informa
 The garden doesn't just sit there; it breathes. The **Aura** behind your plant pulses with a steady, calming rhythm, encouraging you to match your own breathing to the timer. Tiny **Pollen Orbitals** drift around the core like fireflies, giving the app a kinetic, "alive" energy.
 
 ### 🥀 Real Stakes (The Wither Mechanic)
-Focus is a commitment. If you abandon a mission halfway through, your garden will **Wilted**. It’s a gentle, visual reminder that your consistency matters. But don't worry—a new session always brings the green back.
+Focus is a commitment. If you abandon a mission halfway through, your garden will **Wilt**. It’s a gentle, visual reminder that your consistency matters. But don't worry—a new session always brings the green back.
 
 ### 📊 Your Neural Story
 Check your **Neural History** to see a 14-day map of your progress. It’s a minimalist dot-matrix that visualizes your "Wins" and "Losses," making it easy to see your focus streaks at a glance.
