@@ -15,10 +15,21 @@ class OpenRouterService {
   static const String apiKeyPrefsKey = 'openrouter_api_key';
 
   /// Default model. A free-tier model so studying costs nothing.
-  /// Change this to any OpenRouter model id (e.g. 'openai/gpt-4o-mini')
-  /// if you prefer a paid/faster model.
-  static const String defaultModel =
-      'meta-llama/llama-3.3-70b-instruct:free';
+  /// Verified working 2026-09-18. Free lineups rotate often — if AI features
+  /// start failing everywhere, re-check https://openrouter.ai/models and
+  /// update this list. Change to any OpenRouter model id
+  /// (e.g. 'openai/gpt-4o-mini') if you prefer a paid/faster model.
+  static const String defaultModel = 'nex-agi/nex-n2.5-pro:free';
+
+  /// Fallbacks tried in order when the default is rate-limited (429),
+  /// unavailable (404/400) or erroring (5xx). All free-tier.
+  /// Auth/billing errors (401/402) fail fast instead — another model
+  /// wouldn't help those.
+  static const List<String> fallbackModels = [
+    'nex-agi/nex-n2.5-mini:free',
+    'google/gemma-4-31b-it:free',
+    'z-ai/glm-5.2:free',
+  ];
 
   static const String _baseUrl =
       'https://openrouter.ai/api/v1/chat/completions';
@@ -56,6 +67,8 @@ class OpenRouterService {
   /// Low-level chat completion call.
   ///
   /// [messages] must be a list of {"role": ..., "content": ...} maps.
+  /// Tries [model] first, then [fallbackModels] in order when a model is
+  /// rate-limited/unavailable/erroring (free shared pools are flaky).
   /// Throws a categorized [Exception] with one of:
   /// INVALID_KEY, LIMIT_REACHED, SERVER_OVERLOAD, MODEL_ERROR,
   /// or the raw message.
@@ -72,6 +85,40 @@ class OpenRouterService {
       throw Exception('INVALID_KEY');
     }
 
+    final chain = [model, ...fallbackModels.where((m) => m != model)];
+    Exception? lastError;
+    for (var i = 0; i < chain.length; i++) {
+      try {
+        return await _attemptCompletion(
+          apiKey: trimmedKey,
+          messages: messages,
+          model: chain[i],
+          jsonMode: jsonMode,
+          temperature: temperature,
+          maxTokens: maxTokens,
+        );
+      } catch (e) {
+        final msg = e.toString();
+        // Auth/billing problems won't be fixed by another model — fail fast.
+        if (msg.contains('INVALID_KEY') || msg.contains('402')) rethrow;
+        lastError = e is Exception ? e : Exception(e.toString());
+        // Brief pause before the next model so shared pools can recover.
+        if (i < chain.length - 1) {
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
+    }
+    throw lastError ?? Exception('SERVER_OVERLOAD');
+  }
+
+  static Future<String> _attemptCompletion({
+    required String apiKey,
+    required List<Map<String, String>> messages,
+    required String model,
+    required bool jsonMode,
+    required double temperature,
+    required int maxTokens,
+  }) async {
     final body = <String, dynamic>{
       'model': model,
       'messages': messages,
@@ -89,7 +136,7 @@ class OpenRouterService {
             Uri.parse(_baseUrl),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $trimmedKey',
+              'Authorization': 'Bearer $apiKey',
               ..._appHeaders,
             },
             body: jsonEncode(body),
@@ -122,7 +169,9 @@ class OpenRouterService {
       throw Exception('LIMIT_REACHED');
     } else if (status >= 500 || status == 503) {
       throw Exception('SERVER_OVERLOAD');
-    } else if (status == 400) {
+    } else if (status == 400 || status == 404) {
+      // 400: model rejected the request (e.g. no response_format support).
+      // 404: model slug retired/unknown.
       throw Exception('MODEL_ERROR');
     }
     throw Exception('OPENROUTER_ERROR_$status');
