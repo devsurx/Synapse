@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/openai_service.dart';
+import '../services/openrouter_service.dart';
 
 class QuizScreen extends StatefulWidget {
   final String? studyContext;
@@ -24,7 +24,7 @@ class _QuizScreenState extends State<QuizScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final apiKey = await OpenAIService.getApiKey();
+      final apiKey = await OpenRouterService.getApiKey();
       if (apiKey.isEmpty) {
         throw Exception('INVALID_KEY');
       }
@@ -36,7 +36,7 @@ DO NOT use outside knowledge. If the text is empty, return an empty JSON array.
 Return ONLY a valid JSON array of objects with keys: "question", "options" (array of 4 strings), "answerIndex" (integer 0-3).
 """;
 
-      final decoded = await OpenAIService.generateJson(
+      final decoded = await OpenRouterService.generateJson(
         prompt,
         apiKey: apiKey,
         systemInstruction:
@@ -57,7 +57,7 @@ Return ONLY a valid JSON array of objects with keys: "question", "options" (arra
       setState(() => _isLoading = false);
       if (!mounted) return;
       final msg = e.toString().contains('INVALID_KEY')
-          ? "OpenAI API key missing. Add it in Settings."
+          ? "OpenRouter API key missing. Add it in Settings."
           : "AI failed to build the quiz.";
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }

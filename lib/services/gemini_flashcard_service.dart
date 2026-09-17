@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'openai_service.dart';
+import 'openrouter_service.dart';
 
 /// Legacy filename/class kept so existing imports don't break.
-/// Now backed by OpenAI instead of Google Gemini.
+/// Now backed by OpenRouter instead of Google Gemini.
 class FlashcardService {
   static Future<List<Map<String, String>>> generateFlashcards(
     String pdfText,
@@ -11,7 +11,7 @@ class FlashcardService {
     try {
       final effectiveKey = apiKey.trim().isNotEmpty
           ? apiKey.trim()
-          : await OpenAIService.getApiKey();
+          : await OpenRouterService.getApiKey();
       if (effectiveKey.isEmpty) throw Exception("INVALID_KEY");
 
       final safeText =
@@ -26,7 +26,7 @@ TEXT: $safeText
 
       dynamic decoded;
       try {
-        decoded = await OpenAIService.generateJson(
+        decoded = await OpenRouterService.generateJson(
           prompt,
           apiKey: effectiveKey,
           systemInstruction:
@@ -36,7 +36,7 @@ TEXT: $safeText
         if (e.toString().contains('SERVER_OVERLOAD')) {
           // One extra retry for overloaded servers.
           await Future.delayed(const Duration(seconds: 2));
-          decoded = await OpenAIService.generateJson(
+          decoded = await OpenRouterService.generateJson(
             prompt,
             apiKey: effectiveKey,
             systemInstruction:
@@ -47,7 +47,7 @@ TEXT: $safeText
         }
       }
 
-      // OpenAI JSON mode may return {"flashcards": [...]} — normalize both.
+      // OpenRouter JSON mode may return {"flashcards": [...]} — normalize both.
       List<dynamic> list;
       if (decoded is List) {
         list = decoded;

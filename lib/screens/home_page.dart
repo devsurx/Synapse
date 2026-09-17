@@ -305,21 +305,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadKey() async {
     final prefs = await SharedPreferences.getInstance();
-    // Prefer the new OpenAI key; fall back to legacy Gemini key with a hint.
-    final openAiKey = prefs.getString('openai_api_key') ?? "";
-    final legacyKey = prefs.getString('gemini_api_key') ?? "";
     setState(() {
-      _apiController.text = openAiKey.isNotEmpty ? openAiKey : "";
-      if (openAiKey.isEmpty && legacyKey.isNotEmpty) {
-        // Leave the field empty so the user pastes an sk-... key,
-        // but the hint below will explain the migration.
-      }
+      _apiController.text =
+          prefs.getString('openrouter_api_key') ?? "";
     });
   }
 
   Future<void> _saveKey() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('openai_api_key', _apiController.text.trim());
+    final text = _apiController.text.trim();
+    if (text.isEmpty) {
+      // Empty = remove personal override, fall back to built-in shared key.
+      await prefs.remove('openrouter_api_key');
+    } else {
+      await prefs.setString('openrouter_api_key', text);
+    }
     if (mounted) {
       HapticFeedback.mediumImpact();
       Navigator.pop(context);
@@ -337,7 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             // --- API INPUT SECTION ---
             const Text(
-              "OPENAI AUTHENTICATION TOKEN",
+              "PERSONAL KEY OVERRIDE (OPTIONAL)",
               style: TextStyle(
                 color: Color(0xFF8DAA91),
                 fontSize: 10,
@@ -357,7 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontFamily: 'monospace',
                 ),
                 decoration: InputDecoration(
-                  hintText: "PASTE sk-... KEY HERE...",
+                  hintText: "LEAVE EMPTY TO USE BUILT-IN KEY...",
                   hintStyle: TextStyle(
                     color: Colors.white.withOpacity(0.1),
                     fontSize: 13,
@@ -379,7 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // --- DOCUMENTATION SECTION ---
             const Text(
-              "PROCURING ACCESS",
+              "HOW AI ACCESS WORKS",
               style: TextStyle(
                 color: Colors.white30,
                 fontSize: 9,
@@ -394,21 +394,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _instructionStep("01", "Navigate to "),
-                  // Clickable Link Logic
-                  _linkStep("platform.openai.com/api-keys"),
-                  const SizedBox(height: 16),
+                  _instructionStep(
+                    "01",
+                    "The app ships with a built-in shared OpenRouter key — no setup needed",
+                  ),
                   _instructionStep(
                     "02",
-                    "Sign in with your OpenAI account",
+                    "Optionally paste your own sk-or-v1... key above to use it instead",
                   ),
                   _instructionStep(
                     "03",
-                    "Select 'Create new secret key'",
-                  ),
-                  _instructionStep(
-                    "04",
-                    "Paste the sk-... key above (powered by gpt-4o-mini)",
+                    "Clear the field and save to switch back to the built-in key",
                   ),
 
                   const Padding(
@@ -427,7 +423,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "BILLING: OPENAI API USAGE IS PAY-PER-TOKEN — CHECK LIMITS",
+                          "INFO: THE APP USES A FREE OPENROUTER MODEL — NO PAYMENT NEEDED",
                           style: TextStyle(
                             color: Colors.orangeAccent.withOpacity(0.8),
                             fontSize: 10,

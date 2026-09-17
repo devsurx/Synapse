@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../services/ad_widget.dart';
-import '../services/openai_service.dart';
+import '../services/openrouter_service.dart';
 
 class Eli5LabScreen extends StatefulWidget {
   const Eli5LabScreen({super.key});
@@ -40,11 +40,11 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
     if (input.isEmpty) return;
 
     // --- UPDATED: GET OPENAI KEY FROM SHARED PREFERENCES ---
-    final userApiKey = await OpenAIService.getApiKey();
+    final userApiKey = await OpenRouterService.getApiKey();
 
     if (userApiKey.isEmpty) {
       _showSnackBar(
-        "OpenAI API key missing! Please set it in Settings or Onboarding.",
+        "OpenRouter API key missing! Please set it in Settings or Onboarding.",
       );
       return;
     }
@@ -58,7 +58,7 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
     try {
       final prompt =
           "Explain the following like I'm 5 years old. Use a funny analogy: $input";
-      final reply = await OpenAIService.generateText(
+      final reply = await OpenRouterService.generateText(
         prompt,
         apiKey: userApiKey,
         systemInstruction:

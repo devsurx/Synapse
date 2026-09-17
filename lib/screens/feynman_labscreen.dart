@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import '../services/openai_service.dart';
+import '../services/openrouter_service.dart';
 import 'home_page.dart'; // Ensure this matches your filename for glassBox/ImmersiveWrapper
 
 class FeynmanLabScreen extends StatefulWidget {
@@ -120,14 +120,14 @@ GOAL: Help the teacher find gaps in their knowledge of the SOURCE MATERIAL.
 
   Future<void> _endSession() async {
     if (_apiKey.isEmpty) {
-      _apiKey = await OpenAIService.getApiKey();
+      _apiKey = await OpenRouterService.getApiKey();
       if (_apiKey.isEmpty) return;
     }
     setState(() => _isLoading = true);
     HapticFeedback.heavyImpact();
 
-    // Send the full conversation plus a final audit instruction to OpenAI.
-    final auditText = await OpenAIService.chatCompletion(
+    // Send the full conversation plus a final audit instruction to OpenRouter.
+    final auditText = await OpenRouterService.chatCompletion(
       apiKey: _apiKey,
       messages: [
         {'role': 'system', 'content': _systemPrompt()},
@@ -252,7 +252,7 @@ Output the report in this exact format:
   }
 
   Future<void> _initStudentAI() async {
-    _apiKey = await OpenAIService.getApiKey();
+    _apiKey = await OpenRouterService.getApiKey();
     if (_apiKey.isEmpty) return;
 
     _history.clear();
@@ -294,7 +294,7 @@ Output the report in this exact format:
   Future<void> _sendMessage() async {
     if (_controller.text.trim().isEmpty) return;
     if (_apiKey.isEmpty) {
-      _apiKey = await OpenAIService.getApiKey();
+      _apiKey = await OpenRouterService.getApiKey();
       if (_apiKey.isEmpty) return;
     }
     String txt = _controller.text;
@@ -306,7 +306,7 @@ Output the report in this exact format:
     _history.add({'role': 'user', 'content': txt});
 
     try {
-      final res = await OpenAIService.chatCompletion(
+      final res = await OpenRouterService.chatCompletion(
         apiKey: _apiKey,
         messages: [
           {'role': 'system', 'content': _systemPrompt()},
@@ -318,7 +318,7 @@ Output the report in this exact format:
     } catch (e) {
       debugPrint("FEYNMAN ERROR: $e");
       _aiResponse(
-        "My neural link flickered. Please check your OpenAI key / connection and try again.",
+        "My neural link flickered. Please check your OpenRouter key / connection and try again.",
       );
     }
     setState(() => _isLoading = false);

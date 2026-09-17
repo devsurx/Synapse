@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gemini_flashcard_service.dart';
-import '../services/openai_service.dart';
+import '../services/openrouter_service.dart';
 import 'home_page.dart';
 
 class FlashcardScreen extends StatefulWidget {
@@ -62,8 +62,8 @@ class _FlashcardScreenState extends State<FlashcardScreen>
         return;
       }
 
-      // Pass to OpenAI
-      final apiKey = await OpenAIService.getApiKey();
+      // Pass to OpenRouter
+      final apiKey = await OpenRouterService.getApiKey();
       final cards = await FlashcardService.generateFlashcards(pdfText, apiKey);
 
       if (mounted) {

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 import '../main.dart';
@@ -43,7 +42,6 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
-  final TextEditingController _apiKeyController = TextEditingController();
   double _scrollOffset = 0.0;
   int _currentPage = 0;
 
@@ -88,11 +86,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       "desc": "Snap a photo of notes for AI analysis.",
       "icon": "📷",
     },
-    {
-      "title": "AI Activation",
-      "desc": "To enable these features, you'll need an OpenAI API key.",
-      "icon": "🔑",
-    },
   ];
 
   @override
@@ -106,60 +99,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void dispose() {
     _pageController.dispose();
-    _apiKeyController.dispose();
     super.dispose();
-  }
-
-  Future<void> _launchURL() async {
-    final Uri url = Uri.parse('https://platform.openai.com/api-keys');
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      throw Exception('Could not launch $url');
-    }
-  }
-
-  // --- NEW: THE VALIDATION DIALOG ---
-  void _showNoKeyWarning() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "Wait! No API Key?",
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          "Without an OpenAI API key, the Planner, ELI5, and other AI labs will not work. You can add it later in Settings, but your experience will be limited for now.",
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "I'LL GET ONE",
-              style: TextStyle(color: Color(0xFF8DAA91)),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              _proceedToApp(); // Continue anyway
-            },
-            child: const Text(
-              "CONTINUE ANYWAY",
-              style: TextStyle(color: Colors.white24),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _proceedToApp() async {
     final prefs = await SharedPreferences.getInstance();
-    if (_apiKeyController.text.isNotEmpty) {
-      await prefs.setString('openai_api_key', _apiKeyController.text.trim());
-    }
     await prefs.setBool('is_first_time', false);
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -187,7 +131,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             onPageChanged: (int page) => setState(() => _currentPage = page),
             itemCount: _pages.length,
             itemBuilder: (context, i) {
-              if (i == _pages.length - 1) return _buildApiPage(i);
               return _buildStandardPage(i);
             },
           ),
@@ -214,8 +157,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       )
                     : const SizedBox.shrink(),
                 TextButton(
-                  onPressed:
-                      _showNoKeyWarning, // Skip also triggers the warning now
+                  onPressed: _proceedToApp,
                   child: const Text(
                     "SKIP",
                     style: TextStyle(
@@ -247,11 +189,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   backgroundColor: const Color(0xFF8DAA91),
                   onPressed: () {
                     if (_currentPage == _pages.length - 1) {
-                      if (_apiKeyController.text.isEmpty) {
-                        _showNoKeyWarning();
-                      } else {
-                        _proceedToApp();
-                      }
+                      _proceedToApp();
                     } else {
                       _pageController.nextPage(
                         duration: const Duration(milliseconds: 500),
@@ -274,7 +212,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // UI Helpers (Standard Page, API Page, Dots, etc.)
+  // UI Helpers (Standard Page, Dots, etc.)
   Widget _buildDot(int index) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -308,114 +246,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             style: _descStyle,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildApiPage(int i) {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(30, 120, 30, 150),
-      child: Column(
-        children: [
-          _buildIconCircle(_pages[i]["icon"]!),
-          const SizedBox(height: 30),
-          Text(_pages[i]["title"]!, style: _titleStyle.copyWith(fontSize: 28)),
-          const SizedBox(height: 12),
-          Text(
-            _pages[i]["desc"]!,
-            textAlign: TextAlign.center,
-            style: _descStyle,
-          ),
-          const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.03),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white10),
-            ),
-            child: Column(
-              children: [
-                _instructionStep(
-                  "1",
-                  "Go to platform.openai.com/api-keys",
-                  isLink: true,
-                  onTap: _launchURL,
-                ),
-                _instructionStep("2", "Click 'Create new secret key'"),
-                _instructionStep("3", "Paste the sk-... key below"),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
-          TextField(
-            controller: _apiKeyController,
-            obscureText: true,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: "Paste sk-... key here",
-              hintStyle: const TextStyle(color: Colors.white24),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
-              prefixIcon: const Icon(Icons.vpn_key, color: Color(0xFF8DAA91)),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15),
-                borderSide: const BorderSide(color: Color(0xFF8DAA91)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _instructionStep(
-    String num,
-    String text, {
-    bool isLink = false,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 12,
-              backgroundColor: const Color(0xFF8DAA91),
-              child: Text(
-                num,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: isLink ? const Color(0xFF8DAA91) : Colors.white70,
-                  fontSize: 14,
-                  decoration: isLink
-                      ? TextDecoration.underline
-                      : TextDecoration.none,
-                ),
-              ),
-            ),
-            if (isLink)
-              const Icon(Icons.open_in_new, size: 14, color: Color(0xFF8DAA91)),
-          ],
-        ),
       ),
     );
   }

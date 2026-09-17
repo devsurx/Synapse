@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import '../services/openai_service.dart';
+import '../services/openrouter_service.dart';
 
 class PlanScreen extends StatefulWidget {
   final String? studyContext;
@@ -126,7 +126,7 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
     if (widget.studyContext == null || widget.studyContext!.trim().isEmpty)
       return;
 
-    final String userApiKey = await OpenAIService.getApiKey();
+    final String userApiKey = await OpenRouterService.getApiKey();
 
     if (userApiKey.isEmpty) {
       setState(() => _errorType = "CONFIG_ERROR");
@@ -161,10 +161,10 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
       FORMATTING: Markdown with bold headers (##) and emojis.
       """;
 
-      // --- OpenAI call with one retry on transient overload ---
+      // --- OpenRouter call with one retry on transient overload ---
       String generatedText;
       try {
-        generatedText = await OpenAIService.generateText(
+        generatedText = await OpenRouterService.generateText(
           prompt,
           apiKey: userApiKey,
           systemInstruction:
@@ -174,7 +174,7 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
       } catch (e) {
         if (e.toString().contains('SERVER_OVERLOAD')) {
           await Future.delayed(const Duration(seconds: 2));
-          generatedText = await OpenAIService.generateText(
+          generatedText = await OpenRouterService.generateText(
             prompt,
             apiKey: userApiKey,
             systemInstruction:

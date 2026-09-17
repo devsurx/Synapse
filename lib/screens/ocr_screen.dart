@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/openai_service.dart';
+import '../services/openrouter_service.dart';
 
 class OCRScreen extends StatefulWidget {
   final Function(String) onNotesProcessed;
@@ -44,10 +44,10 @@ class _OCRScreenState extends State<OCRScreen> {
 
       setState(() => _statusMessage = "AI Polishing text...");
 
-      // 2. AI Cleanup Step (Fixing OCR errors) via OpenAI
-      final apiKey = await OpenAIService.getApiKey();
+      // 2. AI Cleanup Step (Fixing OCR errors) via OpenRouter
+      final apiKey = await OpenRouterService.getApiKey();
       if (apiKey.isEmpty) {
-        throw Exception("OpenAI API key missing. Add it in Settings.");
+        throw Exception("OpenRouter API key missing. Add it in Settings.");
       }
       final prompt =
           """
@@ -59,7 +59,7 @@ class _OCRScreenState extends State<OCRScreen> {
 
       String cleanedText;
       try {
-        cleanedText = await OpenAIService.generateText(
+        cleanedText = await OpenRouterService.generateText(
           prompt,
           apiKey: apiKey,
           systemInstruction:

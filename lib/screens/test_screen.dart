@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/openai_service.dart';
+import '../services/openrouter_service.dart';
 import 'home_page.dart'; // To use glassBox and ImmersiveWrapper
 
 class TestScreen extends StatefulWidget {
@@ -26,7 +26,7 @@ class _TestScreenState extends State<TestScreen> {
 
   Future<void> _generateTest() async {
     final prefs = await SharedPreferences.getInstance();
-    final apiKey = await OpenAIService.getApiKey();
+    final apiKey = await OpenRouterService.getApiKey();
     final sourceText = prefs.getString('global_synced_pdf') ?? "";
 
     if (apiKey.isEmpty || sourceText.isEmpty) {
@@ -44,7 +44,7 @@ class _TestScreenState extends State<TestScreen> {
     """;
 
     try {
-      final decoded = await OpenAIService.generateJson(
+      final decoded = await OpenRouterService.generateJson(
         prompt,
         apiKey: apiKey,
         systemInstruction:
