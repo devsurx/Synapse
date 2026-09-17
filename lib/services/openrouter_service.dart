@@ -266,7 +266,8 @@ class OpenRouterService {
       return await fn();
     } catch (e) {
       final msg = e.toString();
-      final isTransient = msg.contains('SERVER_OVERLOAD') ||
+      final isTransient =
+          msg.contains('SERVER_OVERLOAD') ||
           msg.contains('503') ||
           msg.contains('500') ||
           msg.contains('Timeout');

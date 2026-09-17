@@ -1,11 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'dart:math' as math;
+import 'widgets/story_card.dart';
+
+class _SessionRingPainter extends CustomPainter {
+  final double progress;
+  final Color accent;
+
+  _SessionRingPainter({required this.progress, required this.accent});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 8;
+    final track = Paint()
+      ..color = Colors.white.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 9
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, track);
+
+    if (progress <= 0) return;
+    final fill = Paint()
+      ..color = accent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 9
+      ..strokeCap = StrokeCap.round;
+    // Add a soft glow behind the progress arc
+    final glow = Paint()
+      ..color = accent.withOpacity(0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 16
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    const start = -math.pi / 2;
+    final sweep = progress * 2 * math.pi;
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start,
+        sweep, false, glow);
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start,
+        sweep, false, fill);
+  }
+
+  @override
+  bool shouldRepaint(_SessionRingPainter old) =>
+      old.progress != progress || old.accent != accent;
+}
 
 enum PomodoroPhase { focus, shortBreak, longBreak }
 
@@ -27,6 +75,7 @@ class _GardenScreenState extends State<GardenScreen>
   bool _isTimerRunning = false;
   bool _isMuted = false;
   bool _isLoading = true;
+  bool _isSharing = false;
 
   // Mechanics & Spotify State
   bool _isWilted = false;
@@ -198,22 +247,105 @@ class _GardenScreenState extends State<GardenScreen>
     }
   }
 
+  /// Renders the progress story card offscreen, saves it as PNG, and opens
+  /// the system share sheet (Instagram story, WhatsApp, ...).
+  Future<void> _shareStory() async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+    HapticFeedback.mediumImpact();
+
+    OverlayEntry? entry;
+    try {
+      final boundaryKey = GlobalKey();
+      entry = OverlayEntry(
+        builder: (_) => Positioned(
+          left: -1200,
+          top: 0,
+          child: RepaintBoundary(
+            key: boundaryKey,
+            child: FocusStoryCard(
+              level: _currentLevel,
+              expPercent: (_currentExp * 100).toInt(),
+              focusMinutes: _totalFocusMinutes,
+              streak: _streak,
+              date: DateTime.now(),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(context).insert(entry);
+      // Wait until the offscreen card has actually painted.
+      await WidgetsBinding.instance.endOfFrame;
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      final boundary =
+          boundaryKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 1.0);
+      final bytes = await image.toByteData(format: ImageByteFormat.png);
+      if (bytes == null) throw Exception("Render failed");
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/synapse-progress.png');
+      await file.writeAsBytes(bytes.buffer.asUint8List());
+
+      await Share.shareXFiles([
+        XFile(file.path, mimeType: 'image/png'),
+      ], text: 'My Synapse focus progress — grow your mind 🌱');
+    } catch (e) {
+      debugPrint("SHARE ERROR: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't build the story. Try again.")),
+        );
+      }
+    } finally {
+      entry?.remove();
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
   // --- UI Components ---
+
+  Widget _circleIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onPressed();
+          },
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Icon(icon, color: Colors.white70, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildTopBar() {
     Color accent = _isWilted ? Colors.redAccent : const Color(0xFF8DAA91);
 
     return Positioned(
-      top: 60,
+      top: 12,
       left: 15,
       right: 15,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(
-            icon: const Icon(Icons.tune_rounded, color: Colors.white38),
-            onPressed: _showSettings,
-          ),
+          _circleIconButton(icon: Icons.tune_rounded, onPressed: _showSettings),
 
           // Spotify Pulse Pill
           GestureDetector(
@@ -274,11 +406,8 @@ class _GardenScreenState extends State<GardenScreen>
             ),
           ),
 
-          IconButton(
-            icon: Icon(
-              _isMuted ? Icons.volume_off : Icons.volume_up,
-              color: Colors.white38,
-            ),
+          _circleIconButton(
+            icon: _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
             onPressed: () => setState(() {
               _isMuted = !_isMuted;
               _audioPlayer.setVolume(_isMuted ? 0 : 1);
@@ -289,44 +418,95 @@ class _GardenScreenState extends State<GardenScreen>
     );
   }
 
+  int get _phaseTotalSeconds {
+    switch (_currentPhase) {
+      case PomodoroPhase.focus:
+        return _focusMins * 60;
+      case PomodoroPhase.shortBreak:
+        return _shortBreakMins * 60;
+      case PomodoroPhase.longBreak:
+        return _longBreakMins * 60;
+    }
+  }
+
+  double get _sessionProgress {
+    if (_phaseTotalSeconds <= 0) return 0;
+    return (1 - _secondsRemaining / _phaseTotalSeconds).clamp(0.0, 1.0);
+  }
+
   Widget _buildGardenCore() {
+    final Color accent = _isWilted
+        ? Colors.redAccent
+        : const Color(0xFF8DAA91);
     return Center(
       child: GestureDetector(
         onTap: _handlePetting,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            AnimatedBuilder(
-              animation: _animController,
-              builder: (context, _) => Container(
-                width: 260,
-                height: 260,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: (_isWilted ? Colors.red : const Color(0xFF8DAA91))
-                          .withOpacity(0.1 + (_animController.value * 0.05)),
-                      blurRadius: _isPetting ? 120 : 80,
-                      spreadRadius: _isPetting ? 40 : 20,
-                    ),
-                  ],
+        child: SizedBox(
+          width: 320,
+          height: 320,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Breathing aura
+              AnimatedBuilder(
+                animation: _animController,
+                builder: (context, _) => Container(
+                  width: 250,
+                  height: 250,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withOpacity(
+                          0.10 + (_animController.value * 0.06),
+                        ),
+                        blurRadius: _isPetting ? 120 : 80,
+                        spreadRadius: _isPetting ? 40 : 20,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            ...List.generate(
-              math.min(5 + _currentLevel, 15),
-              (i) => _buildFirefly(i),
-            ),
-            AnimatedScale(
-              scale: _isPetting ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              child: Text(
-                _isWilted ? "🥀" : _getEmoji(),
-                style: const TextStyle(fontSize: 130),
+              // Session progress ring
+              CustomPaint(
+                size: const Size(300, 300),
+                painter: _SessionRingPainter(
+                  progress: _sessionProgress,
+                  accent: accent,
+                ),
               ),
-            ),
-          ],
+              // Ground shadow the plant sits on
+              Positioned(
+                bottom: 34,
+                child: Container(
+                  width: 170,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.55),
+                        blurRadius: 22,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              ...List.generate(
+                math.min(5 + _currentLevel, 15),
+                (i) => _buildFirefly(i),
+              ),
+              AnimatedScale(
+                scale: _isPetting ? 1.2 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                child: Text(
+                  _isWilted ? "🥀" : _getEmoji(),
+                  style: const TextStyle(fontSize: 124),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -368,27 +548,64 @@ class _GardenScreenState extends State<GardenScreen>
             colors: _getThemeGradient(),
           ),
         ),
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  const SizedBox(height: 140),
-                  _buildPhaseIndicator(),
-                  const SizedBox(height: 20),
-                  _buildGardenCore(),
-                  const SizedBox(height: 20),
-                  _buildTimerDisplay(),
-                  const SizedBox(height: 30),
-                  _buildStartButton(),
-                  const SizedBox(height: 40),
-                  _buildStatsCard(),
-                ],
+        child: SafeArea(
+          bottom: false, // Navbar floats above; we pad content instead
+          child: Stack(
+            children: [
+              // Ambient depth orbs
+              Positioned(
+                top: 90,
+                right: -70,
+                child: Container(
+                  width: 220,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF8DAA91).withOpacity(0.07),
+                  ),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
               ),
-            ),
-            _buildTopBar(),
-          ],
+              Positioned(
+                bottom: 180,
+                left: -80,
+                child: Container(
+                  width: 240,
+                  height: 240,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFD4A373).withOpacity(0.05),
+                  ),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+              SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 140),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 110),
+                    _buildPhaseIndicator(),
+                    const SizedBox(height: 20),
+                    _buildGardenCore(),
+                    const SizedBox(height: 20),
+                    _buildTimerDisplay(),
+                    const SizedBox(height: 30),
+                    _buildStartButton(),
+                    const SizedBox(height: 40),
+                    _buildStatsCard(),
+                  ],
+                ),
+              ),
+              _buildTopBar(),
+            ],
+          ),
         ),
       ),
     );
@@ -426,36 +643,85 @@ class _GardenScreenState extends State<GardenScreen>
   }
 
   Widget _buildTimerDisplay() {
-    return Text(
-      "${(_secondsRemaining ~/ 60)}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
-      style: const TextStyle(
-        fontSize: 100,
-        fontWeight: FontWeight.w100,
-        color: Colors.white,
-      ),
+    final String caption = _currentPhase == PomodoroPhase.focus
+        ? "$_focusMins MIN FOCUS"
+        : _currentPhase == PomodoroPhase.shortBreak
+            ? "$_shortBreakMins MIN BREAK"
+            : "$_longBreakMins MIN BREAK";
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          "${(_secondsRemaining ~/ 60)}:${(_secondsRemaining % 60).toString().padLeft(2, '0')}",
+          style: const TextStyle(
+            fontSize: 96,
+            fontWeight: FontWeight.w100,
+            color: Colors.white,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          caption,
+          style: TextStyle(
+            color: (_isWilted ? Colors.redAccent : const Color(0xFF8DAA91))
+                .withOpacity(0.8),
+            fontSize: 11,
+            letterSpacing: 4,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildStartButton() {
+    final bool running = _isTimerRunning;
     return GestureDetector(
       onTap: _toggleTimer,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
         decoration: BoxDecoration(
-          color: _isTimerRunning
-              ? Colors.white.withOpacity(0.05)
-              : const Color(0xFF8DAA91),
-          borderRadius: BorderRadius.circular(40),
-          border: _isTimerRunning ? Border.all(color: Colors.white24) : null,
+          gradient: running
+              ? null
+              : const LinearGradient(
+                  colors: [Color(0xFF8DAA91), Color(0xFF6A8A6E)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+          color: running ? Colors.white.withOpacity(0.05) : null,
+          borderRadius: BorderRadius.circular(24),
+          border: running ? Border.all(color: Colors.white24) : null,
+          boxShadow: running
+              ? []
+              : [
+                  BoxShadow(
+                    color: const Color(0xFF8DAA91).withOpacity(0.35),
+                    blurRadius: 28,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
         ),
-        child: Text(
-          _isTimerRunning ? "ABANDON SESSION" : "START MISSION",
-          style: TextStyle(
-            color: _isTimerRunning ? Colors.white : Colors.black,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              running ? Icons.stop_rounded : Icons.play_arrow_rounded,
+              color: running ? Colors.white : Colors.black,
+              size: 22,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              running ? "ABANDON SESSION" : "START MISSION",
+              style: TextStyle(
+                color: running ? Colors.white : Colors.black,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -474,17 +740,9 @@ class _GardenScreenState extends State<GardenScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    "LVL $_currentLevel",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    "STREAK: $_streak",
-                    style: const TextStyle(color: Colors.white38, fontSize: 10),
-                  ),
+                  _statMini("LEVEL", "$_currentLevel", const Color(0xFF8DAA91)),
+                  _statMini("FOCUS TIME", _formatFocusTime(), Colors.white),
+                  _statMini("STREAK", "$_streak", const Color(0xFFD4A373)),
                 ],
               ),
               const SizedBox(height: 20),
@@ -495,10 +753,99 @@ class _GardenScreenState extends State<GardenScreen>
                 minHeight: 6,
                 borderRadius: BorderRadius.circular(10),
               ),
+              const SizedBox(height: 10),
+              Text(
+                "${(_currentExp * 100).toInt()}% TO NEXT LEVEL",
+                style: const TextStyle(
+                  color: Colors.white24,
+                  fontSize: 9,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 22),
+              GestureDetector(
+                onTap: _shareStory,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFF8DAA91).withOpacity(0.35),
+                    ),
+                    color: const Color(0xFF8DAA91).withOpacity(0.07),
+                  ),
+                  child: _isSharing
+                      ? const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF8DAA91),
+                            ),
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.ios_share_rounded,
+                              color: Color(0xFF8DAA91),
+                              size: 16,
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              "SHARE PROGRESS",
+                              style: TextStyle(
+                                color: Color(0xFF8DAA91),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  String _formatFocusTime() {
+    if (_totalFocusMinutes < 60) return "${_totalFocusMinutes}M";
+    final h = _totalFocusMinutes ~/ 60;
+    final m = _totalFocusMinutes % 60;
+    return m == 0 ? "${h}H" : "${h}H ${m}M";
+  }
+
+  Widget _statMini(String label, String value, Color valueColor) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white38,
+            fontSize: 9,
+            letterSpacing: 2,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 

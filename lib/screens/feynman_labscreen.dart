@@ -507,9 +507,31 @@ Output the report in this exact format:
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.send_rounded, color: Color(0xFF8DAA91)),
-              onPressed: _sendMessage,
+            GestureDetector(
+              onTap: _sendMessage,
+              child: Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8DAA91), Color(0xFF6A8A6E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF8DAA91).withOpacity(0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.send_rounded,
+                  color: Colors.black,
+                  size: 19,
+                ),
+              ),
             ),
           ],
         ),

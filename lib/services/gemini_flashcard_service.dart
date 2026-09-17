@@ -14,10 +14,12 @@ class FlashcardService {
           : await OpenRouterService.getApiKey();
       if (effectiveKey.isEmpty) throw Exception("INVALID_KEY");
 
-      final safeText =
-          pdfText.length > 7000 ? pdfText.substring(0, 7000) : pdfText;
+      final safeText = pdfText.length > 7000
+          ? pdfText.substring(0, 7000)
+          : pdfText;
 
-      final prompt = '''
+      final prompt =
+          '''
 Return a JSON array of 5-8 flashcards from this text.
 Each item must have exactly these keys: "front" and "back".
 Return ONLY the JSON array, no markdown, no extra text.

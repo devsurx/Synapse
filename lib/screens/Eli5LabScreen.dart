@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../services/ad_widget.dart';
 import '../services/openrouter_service.dart';
+import '../widgets/synapse_widgets.dart';
 
 class Eli5LabScreen extends StatefulWidget {
   const Eli5LabScreen({super.key});
@@ -186,22 +187,14 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        title: const Text(
-          "ELI5 LABORATORY",
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 4,
-            color: Colors.white24,
-          ),
-        ),
+        title: const PillHeader("ELI5 LABORATORY"),
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back_ios_new,
             size: 20,
-            color: Colors.white24,
+            color: Colors.white54,
           ),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.maybePop(context),
         ),
       ),
       body: SingleChildScrollView(
@@ -241,63 +234,20 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
     bool isLimit = _errorType == "LIMIT";
     bool isAuth = _errorType == "AUTH";
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFF8DAA91).withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            isAuth
-                ? Icons.lock_person
-                : (isLimit ? Icons.hourglass_empty : Icons.wifi_off_rounded),
-            color: const Color(0xFF8DAA91),
-            size: 48,
-          ),
-          const SizedBox(height: 20),
-          Text(
-            isAuth
-                ? "INVALID API KEY"
-                : (isLimit ? "LAB OVERLOADED" : "CONNECTION HICCUP"),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.5,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            isAuth
-                ? "Your API key seems incorrect. Please update it in the settings."
-                : (isLimit
-                      ? "The molecular processor is cooling down. Please wait a minute."
-                      : "The lab's sensors are offline. Check your internet."),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white60,
-              fontSize: 14,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _simplifyConcept,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8DAA91),
-              foregroundColor: Colors.black,
-            ),
-            child: const Text(
-              "RETRY EXPERIMENT",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
+    return ErrorCard(
+      icon: isAuth
+          ? Icons.lock_person
+          : (isLimit ? Icons.hourglass_empty : Icons.wifi_off_rounded),
+      title: isAuth
+          ? "INVALID API KEY"
+          : (isLimit ? "LAB OVERLOADED" : "CONNECTION HICCUP"),
+      message: isAuth
+          ? "Your API key seems incorrect. Please update it in the settings."
+          : (isLimit
+                ? "The molecular processor is cooling down. Please wait a minute."
+                : "The lab's sensors are offline. Check your internet."),
+      actionLabel: "RETRY EXPERIMENT",
+      onRetry: _simplifyConcept,
     );
   }
 
@@ -320,25 +270,10 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          height: 55,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _simplifyConcept,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8DAA91),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-            ),
-            child: const Text(
-              "SIMPLIFY",
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
+        PrimaryButton(
+          label: "SIMPLIFY",
+          icon: Icons.auto_fix_high_rounded,
+          onPressed: _isLoading ? null : _simplifyConcept,
         ),
       ],
     );

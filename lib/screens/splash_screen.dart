@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:async';
 // Required for ImageFilter
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +15,12 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
+  /// Android ID of the developer's phone. Only this device skips
+  /// onboarding/login. Safe to keep: an Android ID alone grants nothing.
+  /// TEMPORARILY DISABLED so the owner can review onboarding.
+  /// Re-enable by restoring the real Android ID when done.
+  static const String _devAndroidId = 'temporarily-disabled';
+
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _pulseAnimation;
@@ -51,15 +58,34 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _navigateToNext() async {
-    await Future.delayed(const Duration(seconds: 4));
+    await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
     bool isFirstTime = prefs.getBool('is_first_time') ?? true;
+    String? userName = prefs.getString('user_name');
 
-    Widget nextScreen = isFirstTime
-        ? const OnboardingScreen()
-        : const MainNavigationHolder();
+    // Dev-device exception: this phone skips onboarding AND login entirely,
+    // even on a fresh install. Everywhere else the normal rules apply.
+    if (await _isDevDevice()) {
+      isFirstTime = false;
+      await prefs.setBool('is_first_time', false);
+      if (userName == null || userName.trim().isEmpty) {
+        userName = 'Developer';
+        await prefs.setString('user_name', userName);
+      }
+    }
+
+    // First launch -> onboarding. Returning without a saved name (e.g. app
+    // killed on the login screen) -> login. Otherwise straight into the app.
+    Widget nextScreen;
+    if (isFirstTime) {
+      nextScreen = const OnboardingScreen();
+    } else if (userName == null || userName.trim().isEmpty) {
+      nextScreen = const LoginScreen();
+    } else {
+      nextScreen = const MainNavigationHolder();
+    }
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
@@ -70,6 +96,18 @@ class _SplashScreenState extends State<SplashScreen>
         transitionDuration: const Duration(milliseconds: 1200),
       ),
     );
+  }
+
+  /// True only on the developer's own phone (matched by Android ID,
+  /// which survives reinstalls but isn't available to other users).
+  /// This is how the dev device stays exempt from onboarding/login.
+  Future<bool> _isDevDevice() async {
+    try {
+      final android = await DeviceInfoPlugin().androidInfo;
+      return android.id == _devAndroidId;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
@@ -103,33 +141,36 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Animated Logo Container
+                  // Animated Logo Container (pops in, then breathes)
                   ScaleTransition(
-                    scale: _pulseAnimation,
-                    child: Container(
-                      padding: const EdgeInsets.all(25),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF8DAA91).withOpacity(0.2),
-                            blurRadius: 40,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                        gradient: RadialGradient(
-                          colors: [
-                            Colors.white.withOpacity(0.1),
-                            Colors.white.withOpacity(0.01),
+                    scale: _scaleAnimation,
+                    child: ScaleTransition(
+                      scale: _pulseAnimation,
+                      child: Container(
+                        padding: const EdgeInsets.all(25),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF8DAA91).withOpacity(0.2),
+                              blurRadius: 40,
+                              spreadRadius: 5,
+                            ),
                           ],
+                          gradient: RadialGradient(
+                            colors: [
+                              Colors.white.withOpacity(0.1),
+                              Colors.white.withOpacity(0.01),
+                            ],
+                          ),
+                          border: Border.all(color: Colors.white10),
                         ),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: Image.asset(
-                        'assets/logo_circle.png',
-                        height: 100,
-                        width: 100,
-                        fit: BoxFit.contain,
+                        child: Image.asset(
+                          'assets/logo_circle.png',
+                          height: 100,
+                          width: 100,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -9,6 +10,7 @@ import 'screens/plan_screen.dart';
 import 'screens/splash_screen.dart'; // Using your animated splash now
 import 'garden.dart';
 import 'screens/synapse_error_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,17 +37,7 @@ class StudyCoachApp extends StatelessWidget {
     return MaterialApp(
       title: 'Synapse', // Brand name
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(
-          0xFF0F1710,
-        ), // Matching your Splash vibe
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF8DAA91),
-          secondary: Color(0xFFD4A373),
-        ),
-      ),
+      theme: buildSynapseTheme(),
       // Set the home to your high-end animated splash screen
       home: const SplashScreen(),
     );
@@ -62,20 +54,41 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _nameController = TextEditingController();
+  String? _errorText;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handleGetStarted() async {
     String name = _nameController.text.trim();
-    if (name.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_name', name);
-
-      if (!mounted) return;
-      // After getting the name, finally go to the main app
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainNavigationHolder()),
-      );
+    if (name.isEmpty) {
+      setState(() => _errorText = "Tell us your name to continue");
+      return;
     }
+    setState(() {
+      _errorText = null;
+      _isSaving = true;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_name', name);
+
+    if (!mounted) return;
+    // After getting the name, finally go to the main app
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const MainNavigationHolder(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 600),
+      ),
+    );
   }
 
   @override
@@ -99,70 +112,108 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Welcome,",
-                  style: TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+            child: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Welcome,",
+                          style: TextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const Text(
+                          "What should we call you?",
+                          style: TextStyle(fontSize: 18, color: Colors.white54),
+                        ),
+                        const SizedBox(height: 40),
+                        TextField(
+                          controller: _nameController,
+                          autofocus: true,
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _handleGetStarted(),
+                          onChanged: (_) {
+                            if (_errorText != null) {
+                              setState(() => _errorText = null);
+                            }
+                          },
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                          ),
+                          cursorColor: const Color(0xFF8DAA91),
+                          decoration: InputDecoration(
+                            hintText: "Your name...",
+                            hintStyle: const TextStyle(color: Colors.white24),
+                            errorText: _errorText,
+                            errorStyle: const TextStyle(
+                              color: Colors.orangeAccent,
+                              fontSize: 12,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.05),
+                            contentPadding: const EdgeInsets.all(20),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF8DAA91),
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 65,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF8DAA91),
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: _isSaving ? null : _handleGetStarted,
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.black,
+                                    ),
+                                  )
+                                : const Text(
+                                    "Start Growing",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const Text(
-                  "What should we call you?",
-                  style: TextStyle(fontSize: 18, color: Colors.white54),
-                ),
-                const SizedBox(height: 40),
-                TextField(
-                  controller: _nameController,
-                  style: const TextStyle(color: Colors.white, fontSize: 18),
-                  cursorColor: const Color(0xFF8DAA91),
-                  decoration: InputDecoration(
-                    hintText: "Your name...",
-                    hintStyle: const TextStyle(color: Colors.white24),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.05),
-                    contentPadding: const EdgeInsets.all(20),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF8DAA91),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 30),
-                SizedBox(
-                  width: double.infinity,
-                  height: 65,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8DAA91),
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      elevation: 0,
-                    ),
-                    onPressed: _handleGetStarted,
-                    child: const Text(
-                      "Start Growing",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -232,19 +283,27 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
           // Floating Navbar
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
-            left: 20,
-            right: 20,
-            bottom: isKeyboardVisible ? -100 : 30,
+            curve: Curves.easeOutCubic,
+            left: 24,
+            right: 24,
+            bottom: isKeyboardVisible ? -100 : 26,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(30),
+              borderRadius: BorderRadius.circular(28),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                 child: Container(
-                  height: 75,
+                  height: 76,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: Colors.white10),
+                    color: const Color(0xFF101410).withOpacity(0.72),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.45),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -266,29 +325,45 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
   Widget _navItem(int index, IconData icon, String label) {
     bool isSelected = _currentIndex == index;
     return GestureDetector(
-      onTap: () => _pageController.animateToPage(
-        index,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeOutCubic,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? const Color(0xFF8DAA91) : Colors.white30,
-            size: 26,
-          ),
-          if (isSelected)
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+        );
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF8DAA91).withOpacity(0.16)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? const Color(0xFF8DAA91) : Colors.white30,
+              size: 24,
+            ),
+            const SizedBox(height: 3),
             Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF8DAA91),
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF8DAA91) : Colors.white30,
                 fontSize: 10,
-                fontWeight: FontWeight.bold,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                letterSpacing: 1,
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }

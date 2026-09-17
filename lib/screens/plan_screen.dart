@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/openrouter_service.dart';
+import '../widgets/synapse_widgets.dart';
 
 class PlanScreen extends StatefulWidget {
   final String? studyContext;
@@ -231,29 +232,7 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        title: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-              ),
-              child: const Text(
-                "NEXUS PLANNER",
-                style: TextStyle(
-                  letterSpacing: 4,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white54,
-                ),
-              ),
-            ),
-          ),
-        ),
+        title: const PillHeader("NEXUS PLANNER"),
         actions: [
           if (_roadmapText.isNotEmpty && !_isLoading)
             IconButton(
@@ -417,7 +396,8 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
         borderRadius: BorderRadius.circular(28),
         child: Markdown(
           data: _roadmapText,
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 110),
+          physics: const BouncingScrollPhysics(),
           styleSheet: MarkdownStyleSheet(
             p: const TextStyle(
               color: Colors.white70,
@@ -548,59 +528,12 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
       icon = Icons.error_outline_rounded;
     }
 
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 40),
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.03),
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: const Color(0xFF8DAA91).withOpacity(0.1)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: const Color(0xFF8DAA91), size: 48),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _generateRoadmap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8DAA91),
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  "RETRY SYNC",
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return ErrorCard(
+      icon: icon,
+      title: title,
+      message: message,
+      actionLabel: "RETRY SYNC",
+      onRetry: _generateRoadmap,
     );
   }
 }

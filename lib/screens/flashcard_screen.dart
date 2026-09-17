@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gemini_flashcard_service.dart';
 import '../services/openrouter_service.dart';
+import '../widgets/synapse_widgets.dart';
 import 'home_page.dart';
 
 class FlashcardScreen extends StatefulWidget {
@@ -105,22 +106,14 @@ class _FlashcardScreenState extends State<FlashcardScreen>
       backgroundColor: Colors.transparent,
       elevation: 0,
       centerTitle: true,
-      title: const Text(
-        "ACTIVE RECALL",
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 4,
-          color: Colors.white24,
-        ),
-      ),
+      title: const PillHeader("ACTIVE RECALL"),
       leading: IconButton(
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.white24,
+          color: Colors.white54,
         ),
-        onPressed: () => Navigator.pop(context),
+        onPressed: () => Navigator.maybePop(context),
       ),
     );
   }
@@ -272,29 +265,15 @@ class _FlashcardScreenState extends State<FlashcardScreen>
   }
 
   Widget _buildApologyCard() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 50, color: Colors.white10),
-          const SizedBox(height: 20),
-          Text(
-            _errorType == "NO_TEXT" ? "NO PDF TEXT FOUND" : "GARDEN ERROR",
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 30),
-          TextButton(
-            onPressed: _generateFlashcards,
-            child: const Text(
-              "RETRY",
-              style: TextStyle(color: Color(0xFF8DAA91)),
-            ),
-          ),
-        ],
-      ),
+    final bool noText = _errorType == "NO_TEXT";
+    return ErrorCard(
+      icon: noText ? Icons.description_outlined : Icons.error_outline_rounded,
+      title: noText ? "NO PDF TEXT FOUND" : "GARDEN ERROR",
+      message: noText
+          ? "Sync a document from the home screen first, then grow your deck."
+          : "Something disrupted the deck synthesis. ${_errorType ?? ""}",
+      actionLabel: "RETRY",
+      onRetry: _generateFlashcards,
     );
   }
 }

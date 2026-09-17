@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/openrouter_service.dart';
+import '../widgets/synapse_widgets.dart';
 import 'home_page.dart'; // To use glassBox and ImmersiveWrapper
 
 class TestScreen extends StatefulWidget {
@@ -66,6 +67,11 @@ class _TestScreenState extends State<TestScreen> {
     }
   }
 
+  Future<void> _retryGeneration() async {
+    setState(() => _isLoading = true);
+    await _generateTest();
+  }
+
   void _submitTest() {
     int score = 0;
     for (int i = 0; i < _questions.length; i++) {
@@ -96,13 +102,17 @@ class _TestScreenState extends State<TestScreen> {
   }
 
   Widget _buildTestView() {
-    if (_questions.isEmpty)
-      return const Center(
-        child: Text(
-          "ERROR INITIALIZING CORE",
-          style: TextStyle(color: Colors.white),
-        ),
+    if (_questions.isEmpty) {
+      return ErrorCard(
+        icon: Icons.quiz_outlined,
+        title: "ERROR INITIALIZING CORE",
+        message:
+            "The exam failed to generate. Check your connection and try again.",
+        actionLabel: "RETRY",
+        onRetry: _retryGeneration,
+        accent: const Color(0xFF918DAA),
       );
+    }
 
     final q = _questions[_currentStep];
 
@@ -177,6 +187,15 @@ class _TestScreenState extends State<TestScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF918DAA),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 14,
+                ),
+                elevation: 0,
               ),
               onPressed: () {
                 if (_currentStep < 9) {

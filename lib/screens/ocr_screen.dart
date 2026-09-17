@@ -4,6 +4,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/openrouter_service.dart';
+import '../widgets/synapse_widgets.dart';
 
 class OCRScreen extends StatefulWidget {
   final Function(String) onNotesProcessed;
@@ -105,16 +106,16 @@ class _OCRScreenState extends State<OCRScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          "HANDWRITING SCANNER",
-          style: TextStyle(
-            letterSpacing: 2,
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            color: Colors.white24,
-          ),
-        ),
+        title: const PillHeader("HANDWRITING SCANNER"),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            size: 20,
+            color: Colors.white54,
+          ),
+          onPressed: () => Navigator.maybePop(context),
+        ),
       ),
       body: Center(
         child: Padding(
@@ -125,16 +126,18 @@ class _OCRScreenState extends State<OCRScreen> {
               _buildScannerUI(),
               const SizedBox(height: 40),
               if (!_isProcessing) ...[
-                _buildActionBtn(
-                  "CAMERA",
-                  Icons.camera_alt,
-                  () => _processHandwriting(ImageSource.camera),
+                PrimaryButton(
+                  label: "CAMERA",
+                  icon: Icons.camera_alt_rounded,
+                  onPressed: () => _processHandwriting(ImageSource.camera),
                 ),
                 const SizedBox(height: 16),
-                _buildActionBtn(
-                  "GALLERY",
-                  Icons.photo_library,
-                  () => _processHandwriting(ImageSource.gallery),
+                PrimaryButton(
+                  label: "GALLERY",
+                  icon: Icons.photo_library_rounded,
+                  onPressed: () => _processHandwriting(ImageSource.gallery),
+                  background: Colors.white.withOpacity(0.08),
+                  foreground: Colors.white,
                 ),
               ] else
                 const CircularProgressIndicator(color: Color(0xFF8DAA91)),
@@ -166,37 +169,6 @@ class _OCRScreenState extends State<OCRScreen> {
             style: const TextStyle(color: Colors.white54, fontSize: 14),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildActionBtn(String label, IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: Colors.white.withOpacity(0.05),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: const Color(0xFF8DAA91), size: 20),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

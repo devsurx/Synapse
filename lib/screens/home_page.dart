@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:ui';
+import '../theme/app_theme.dart';
+import '../widgets/synapse_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/gestures.dart'; // Required for TapGestureRecognizer
 
@@ -130,7 +132,7 @@ class ImmersiveWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF08080A),
+      backgroundColor: AppColors.abyss,
       appBar: title != null
           ? AppBar(
               backgroundColor: Colors.transparent,
@@ -306,8 +308,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadKey() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _apiController.text =
-          prefs.getString('openrouter_api_key') ?? "";
+      _apiController.text = prefs.getString('openrouter_api_key') ?? "";
     });
   }
 
@@ -441,26 +442,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Spacer(),
 
             // --- INITIALIZE BUTTON ---
-            ElevatedButton(
-              onPressed: _saveKey,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF8DAA91),
-                minimumSize: const Size(double.infinity, 64),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                "INITIALIZE SAVE",
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                  letterSpacing: 4,
-                ),
-              ),
-            ),
+            PrimaryButton(label: "INITIALIZE SAVE", onPressed: _saveKey),
             const SizedBox(height: 10),
           ],
         ),
@@ -853,6 +835,10 @@ class _HomePageState extends State<HomePage> {
   double _gardenExp = 0.0;
   String? _activePdfName;
   bool _isSyncingExp = false;
+  bool _hasSyncedPdf = false;
+  bool _hasGeneratedPlan = false;
+  bool _hasFocused = false;
+  bool _guideDismissed = false;
 
   @override
   void initState() {
@@ -972,6 +958,15 @@ class _HomePageState extends State<HomePage> {
       _gardenLevel = prefs.getInt('garden_level') ?? 1;
       _gardenExp = prefs.getDouble('garden_exp') ?? 0.0;
       _activePdfName = prefs.getString('active_pdf_name');
+      _guideDismissed = prefs.getBool('getting_started_done') ?? false;
+
+      // First-run guide progress
+      final syncedText = prefs.getString('global_synced_pdf') ?? "";
+      _hasSyncedPdf = _activePdfName != null || syncedText.trim().isNotEmpty;
+      _hasGeneratedPlan = (prefs.getString('saved_roadmap') ?? "")
+          .trim()
+          .isNotEmpty;
+      _hasFocused = (prefs.getInt('focus_minutes') ?? 0) > 0;
 
       List<String>? savedPoints = prefs.getStringList('weekly_points');
       if (savedPoints != null) {
@@ -993,6 +988,7 @@ class _HomePageState extends State<HomePage> {
 
     setState(() {
       _activePdfName = fileName;
+      _hasSyncedPdf = true;
     });
 
     widget.onPdfUploaded(text);
@@ -1268,6 +1264,7 @@ class _HomePageState extends State<HomePage> {
         child: Stack(
           children: [
             SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1276,6 +1273,11 @@ class _HomePageState extends State<HomePage> {
                   _buildTopBar(),
                   const SizedBox(height: 30),
                   _buildNeonExpBar(),
+
+                  if (_showGettingStartedGuide()) ...[
+                    const SizedBox(height: 24),
+                    _buildGettingStartedCard(),
+                  ],
 
                   if (_activePdfName != null) ...[
                     const SizedBox(height: 24),
@@ -1566,6 +1568,118 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  bool _showGettingStartedGuide() {
+    if (_guideDismissed) return false;
+    return !(_hasSyncedPdf && _hasGeneratedPlan && _hasFocused);
+  }
+
+  Future<void> _dismissGuide() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('getting_started_done', true);
+    if (mounted) setState(() => _guideDismissed = true);
+  }
+
+  Widget _buildGettingStartedCard() {
+    return glassBox(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8DAA91).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.rocket_launch_rounded,
+                  color: Color(0xFF8DAA91),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  "GET STARTED IN 3 STEPS",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: _dismissGuide,
+                child: Icon(
+                  Icons.close_rounded,
+                  color: Colors.white.withOpacity(0.3),
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _guideStep(
+            done: _hasSyncedPdf,
+            text: "Sync a PDF so every lab knows your material",
+          ),
+          _guideStep(
+            done: _hasGeneratedPlan,
+            text: "Open the Plan tab to generate your roadmap",
+          ),
+          _guideStep(
+            done: _hasFocused,
+            text: "Finish a Garden focus session to earn XP",
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _guideStep({required bool done, required String text}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: done ? const Color(0xFF8DAA91) : Colors.transparent,
+              border: Border.all(
+                color: done
+                    ? const Color(0xFF8DAA91)
+                    : Colors.white.withOpacity(0.25),
+              ),
+            ),
+            child: done
+                ? const Icon(Icons.check_rounded, color: Colors.black, size: 15)
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: done
+                    ? Colors.white.withOpacity(0.35)
+                    : Colors.white.withOpacity(0.8),
+                fontSize: 13,
+                height: 1.4,
+                decoration: done ? TextDecoration.lineThrough : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildActivePdfCard() {
     return glassBox(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1607,53 +1721,123 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _sectionHeader(String title) {
-    return Text(
-      title,
-      style: TextStyle(
-        color: Colors.white.withOpacity(0.3),
-        fontSize: 10,
-        letterSpacing: 4,
-        fontWeight: FontWeight.w900,
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 14,
+          decoration: BoxDecoration(
+            color: const Color(0xFF8DAA91),
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF8DAA91).withOpacity(0.5),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.55),
+            fontSize: 11,
+            letterSpacing: 3.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 5) return "NIGHT SHIFT";
+    if (hour < 12) return "MORNING FOCUS";
+    if (hour < 17) return "AFTERNOON DRIVE";
+    if (hour < 21) return "EVENING SESSION";
+    return "NIGHT SHIFT";
+  }
+
   Widget _buildTopBar() {
+    final initial = widget.userName.trim().isNotEmpty
+        ? widget.userName.trim()[0].toUpperCase()
+        : "?";
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _greeting(),
+                style: const TextStyle(
+                  color: Color(0xFF8DAA91),
+                  fontSize: 10,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.userName.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -1,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Row(
           children: [
-            const Text(
-              "OPERATOR",
-              style: TextStyle(
-                color: Color(0xFF8DAA91),
-                fontSize: 10,
-                letterSpacing: 2,
-                fontWeight: FontWeight.bold,
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8DAA91), Color(0xFF6A8A6E)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8DAA91).withOpacity(0.35),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
-            Text(
-              widget.userName.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: -1,
+            IconButton(
+              icon: const Icon(
+                Icons.settings_outlined,
+                color: Colors.white54,
+                size: 22,
+              ),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
               ),
             ),
           ],
-        ),
-        IconButton(
-          icon: const Icon(
-            Icons.settings_input_component_rounded,
-            color: Colors.white70,
-          ),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SettingsScreen()),
-          ),
         ),
       ],
     );
@@ -1684,13 +1868,22 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         const SizedBox(height: 12),
-        LinearProgressIndicator(
-          value: _gardenExp,
-          backgroundColor: Colors.white10,
-          valueColor: const AlwaysStoppedAnimation(Color(0xFF8DAA91)),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: _gardenExp,
+            backgroundColor: Colors.white.withOpacity(0.07),
+            valueColor: const AlwaysStoppedAnimation(Color(0xFF8DAA91)),
+            minHeight: 6,
+          ),
         ),
       ],
     );
+  }
+
+  void _tileTap(VoidCallback onTap) {
+    HapticFeedback.lightImpact();
+    onTap();
   }
 
   Widget _bentoTile(
@@ -1700,19 +1893,48 @@ class _HomePageState extends State<HomePage> {
     VoidCallback onTap,
   ) {
     return glassBox(
-      onTap: onTap,
+      onTap: () => _tileTap(onTap),
       padding: const EdgeInsets.all(20),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: color.withOpacity(0.25)),
+            ),
+            child: Icon(icon, color: color, size: 26),
+          ),
+          const SizedBox(height: 14),
           Text(
             title,
             style: const TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              letterSpacing: 0.5,
             ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                "OPEN LAB",
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.3),
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_rounded,
+                color: Colors.white.withOpacity(0.3),
+                size: 12,
+              ),
+            ],
           ),
         ],
       ),
@@ -1727,11 +1949,19 @@ class _HomePageState extends State<HomePage> {
     VoidCallback onTap,
   ) {
     return glassBox(
-      onTap: onTap,
+      onTap: () => _tileTap(onTap),
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          Icon(icon, color: color),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: color.withOpacity(0.22)),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -1741,18 +1971,28 @@ class _HomePageState extends State<HomePage> {
                   title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    letterSpacing: 0.3,
                   ),
                 ),
+                const SizedBox(height: 3),
                 Text(
                   sub,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 10,
+                    color: Colors.white.withOpacity(0.45),
+                    fontSize: 11,
+                    height: 1.4,
                   ),
                 ),
               ],
             ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: Colors.white.withOpacity(0.25),
+            size: 22,
           ),
         ],
       ),
