@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gemini_flashcard_service.dart';
+import '../services/openai_service.dart';
 import 'home_page.dart';
 
 class FlashcardScreen extends StatefulWidget {
@@ -61,8 +62,8 @@ class _FlashcardScreenState extends State<FlashcardScreen>
         return;
       }
 
-      // Pass to Gemini 3 Flash
-      final apiKey = prefs.getString('gemini_api_key') ?? "";
+      // Pass to OpenAI
+      final apiKey = await OpenAIService.getApiKey();
       final cards = await FlashcardService.generateFlashcards(pdfText, apiKey);
 
       if (mounted) {

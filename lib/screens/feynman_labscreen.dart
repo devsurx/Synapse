@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:google_generative_ai/google_generative_ai.dart';
+import '../services/openai_service.dart';
 import 'home_page.dart'; // Ensure this matches your filename for glassBox/ImmersiveWrapper
 
 class FeynmanLabScreen extends StatefulWidget {
@@ -30,7 +30,8 @@ class _FeynmanLabScreenState extends State<FeynmanLabScreen> {
   bool _isSocraticMode = false; // New Socratic Toggle
   bool _sessionEnded = false;
   String? _pdfText;
-  ChatSession? _chat;
+  String _apiKey = "";
+  final List<Map<String, String>> _history = [];
 
   @override
   void initState() {
@@ -103,23 +104,48 @@ class _FeynmanLabScreenState extends State<FeynmanLabScreen> {
     });
   }
 
+  String _systemPrompt() {
+    return """
+You are acting as a curious student. The user is your teacher.
+SOURCE MATERIAL: $_pdfText
+
+CURRENT MODE: ${_isSocraticMode ? "SOCRATIC" : "STUDENT"}
+
+IF SOCRATIC: Do not explain anything. Only ask deep, probing questions that force the teacher to find the answer in the source text.
+IF STUDENT: Act like a 10-year-old. Ask 'Why?' and 'How?'. Admit when you are confused.
+
+GOAL: Help the teacher find gaps in their knowledge of the SOURCE MATERIAL.
+""";
+  }
+
   Future<void> _endSession() async {
+    if (_apiKey.isEmpty) {
+      _apiKey = await OpenAIService.getApiKey();
+      if (_apiKey.isEmpty) return;
+    }
     setState(() => _isLoading = true);
     HapticFeedback.heavyImpact();
 
-    // The conversation history is already stored in the 'chat' object.
-    // We send a final command to trigger the analysis.
-    final response = await _chat!.sendMessage(
-      Content.text("""
-      TERMINATE SESSION. Perform a Final Audit.
-      Compare the User's explanations against the SOURCE MATERIAL.
-      
-      Output the report in this exact format:
-      1. MASTERED: [List topics explained correctly]
-      2. KNOWLEDGE GAPS: [List specific facts or sections from the source text that were never mentioned or explained incorrectly]
-      3. CRITICAL OMISSION: [The most important thing they missed]
-      4. NEXT STEP: [One sentence advice]
-    """),
+    // Send the full conversation plus a final audit instruction to OpenAI.
+    final auditText = await OpenAIService.chatCompletion(
+      apiKey: _apiKey,
+      messages: [
+        {'role': 'system', 'content': _systemPrompt()},
+        ..._history,
+        {
+          'role': 'user',
+          'content': """
+TERMINATE SESSION. Perform a Final Audit.
+Compare the User's explanations against the SOURCE MATERIAL.
+
+Output the report in this exact format:
+1. MASTERED: [List topics explained correctly]
+2. KNOWLEDGE GAPS: [List specific facts or sections from the source text that were never mentioned or explained incorrectly]
+3. CRITICAL OMISSION: [The most important thing they missed]
+4. NEXT STEP: [One sentence advice]
+""",
+        },
+      ],
     );
 
     setState(() {
@@ -130,12 +156,14 @@ class _FeynmanLabScreenState extends State<FeynmanLabScreen> {
     // Inside _endSession after receiving response
     final prefs = await SharedPreferences.getInstance();
     // We save the raw analysis string to a 'recent_gaps' key
-    await prefs.setString('neural_audit_latest', response.text ?? "");
+    await prefs.setString('neural_audit_latest', auditText);
 
     // Optional: Save a timestamp so the user knows how "stale" their knowledge is
     await prefs.setString('last_audit_date', DateTime.now().toIso8601String());
 
-    _showAnalyticsDashboard(response.text ?? "Audit failed to initialize.");
+    _showAnalyticsDashboard(
+      auditText.isNotEmpty ? auditText : "Audit failed to initialize.",
+    );
     // 1. Get current weekly points
     List<String> points =
         prefs.getStringList('weekly_points') ??
@@ -224,27 +252,10 @@ class _FeynmanLabScreenState extends State<FeynmanLabScreen> {
   }
 
   Future<void> _initStudentAI() async {
-    final prefs = await SharedPreferences.getInstance();
-    final apiKey = prefs.getString('gemini_api_key') ?? "";
-    if (apiKey.isEmpty) return;
+    _apiKey = await OpenAIService.getApiKey();
+    if (_apiKey.isEmpty) return;
 
-    final model = GenerativeModel(
-      model: 'gemini-1.5-flash',
-      apiKey: apiKey,
-      systemInstruction: Content.system("""
-        You are acting as a curious student. The user is your teacher.
-        SOURCE MATERIAL: $_pdfText
-        
-        CURRENT MODE: ${_isSocraticMode ? "SOCRATIC" : "STUDENT"}
-        
-        IF SOCRATIC: Do not explain anything. Only ask deep, probing questions that force the teacher to find the answer in the source text.
-        IF STUDENT: Act like a 10-year-old. Ask 'Why?' and 'How?'. Admit when you are confused.
-        
-        GOAL: Help the teacher find gaps in their knowledge of the SOURCE MATERIAL.
-      """),
-    );
-
-    _chat = model.startChat();
+    _history.clear();
     _aiResponse("I'm ready to learn. What's the main idea of this document?");
   }
 
@@ -282,15 +293,34 @@ class _FeynmanLabScreenState extends State<FeynmanLabScreen> {
 
   Future<void> _sendMessage() async {
     if (_controller.text.trim().isEmpty) return;
+    if (_apiKey.isEmpty) {
+      _apiKey = await OpenAIService.getApiKey();
+      if (_apiKey.isEmpty) return;
+    }
     String txt = _controller.text;
     setState(() {
       _messages.add({"role": "user", "text": txt});
       _isLoading = true;
     });
     _controller.clear();
+    _history.add({'role': 'user', 'content': txt});
 
-    final res = await _chat!.sendMessage(Content.text(txt));
-    _aiResponse(res.text ?? "...");
+    try {
+      final res = await OpenAIService.chatCompletion(
+        apiKey: _apiKey,
+        messages: [
+          {'role': 'system', 'content': _systemPrompt()},
+          ..._history,
+        ],
+      );
+      _history.add({'role': 'assistant', 'content': res});
+      _aiResponse(res.isNotEmpty ? res : "...");
+    } catch (e) {
+      debugPrint("FEYNMAN ERROR: $e");
+      _aiResponse(
+        "My neural link flickered. Please check your OpenAI key / connection and try again.",
+      );
+    }
     setState(() => _isLoading = false);
 
     _scrollController.animateTo(

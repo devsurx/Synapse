@@ -6,7 +6,6 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 // Import your custom screens
 import 'screens/home_page.dart';
 import 'screens/plan_screen.dart';
-import 'screens/chat_screen.dart';
 import 'screens/splash_screen.dart'; // Using your animated splash now
 import 'garden.dart';
 import 'screens/synapse_error_screen.dart';
@@ -227,7 +226,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
               ),
               GardenScreen(),
               PlanScreen(studyContext: _currentStudyContext),
-              ChatScreen(studyContext: _currentStudyContext),
             ],
           ),
 
@@ -254,7 +252,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
                       _navItem(0, Icons.home_rounded, "Home"),
                       _navItem(1, Icons.yard_rounded, "Garden"),
                       _navItem(2, Icons.auto_awesome_mosaic_rounded, "Plan"),
-                      _navItem(3, Icons.psychology_rounded, "Tutor"),
                     ],
                   ),
                 ),

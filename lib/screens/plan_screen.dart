@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import '../services/openai_service.dart';
 
 class PlanScreen extends StatefulWidget {
   final String? studyContext;
@@ -126,8 +126,7 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
     if (widget.studyContext == null || widget.studyContext!.trim().isEmpty)
       return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final String userApiKey = prefs.getString('gemini_api_key') ?? "";
+    final String userApiKey = await OpenAIService.getApiKey();
 
     if (userApiKey.isEmpty) {
       setState(() => _errorType = "CONFIG_ERROR");
@@ -147,11 +146,6 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
     });
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-3-flash-preview',
-        apiKey: userApiKey,
-      );
-
       String timeframeInstruction = _selectedTimeframe == "1 Hour"
           ? "a 60-minute intensive CRAM SESSION. Break it into 10-minute sprints."
           : _selectedTimeframe == "1 Day"
@@ -167,22 +161,31 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
       FORMATTING: Markdown with bold headers (##) and emojis.
       """;
 
-      // --- ADDED 503 RETRY HANDLER ---
-      GenerateContentResponse response;
+      // --- OpenAI call with one retry on transient overload ---
+      String generatedText;
       try {
-        response = await model.generateContent([Content.text(prompt)]);
+        generatedText = await OpenAIService.generateText(
+          prompt,
+          apiKey: userApiKey,
+          systemInstruction:
+              'You are a world-class study architect. Always answer in Markdown.',
+          maxTokens: 2500,
+        );
       } catch (e) {
-        if (e.toString().contains('503')) {
-          // Wait 2 seconds for server to breathe and try one last time
+        if (e.toString().contains('SERVER_OVERLOAD')) {
           await Future.delayed(const Duration(seconds: 2));
-          response = await model.generateContent([Content.text(prompt)]);
+          generatedText = await OpenAIService.generateText(
+            prompt,
+            apiKey: userApiKey,
+            systemInstruction:
+                'You are a world-class study architect. Always answer in Markdown.',
+            maxTokens: 2500,
+          );
         } else {
           rethrow;
         }
       }
       // -------------------------------
-
-      final generatedText = response.text ?? "Failed to generate roadmap.";
 
       setState(() {
         _roadmapText = generatedText;
@@ -196,11 +199,18 @@ class _PlanScreenState extends State<PlanScreen> with TickerProviderStateMixin {
 
       setState(() {
         _isLoading = false;
-        if (errorStr.contains('429') || errorStr.contains('quota')) {
+        if (errorStr.contains('429') ||
+            errorStr.contains('quota') ||
+            errorStr.contains('limit_reached')) {
           _errorType = "LIMIT";
-        } else if (errorStr.contains('503')) {
+        } else if (errorStr.contains('503') ||
+            errorStr.contains('server_overload') ||
+            errorStr.contains('overload')) {
           _errorType = "SERVER_BUSY"; // New 503 Case
-        } else if (errorStr.contains('403') || errorStr.contains('invalid')) {
+        } else if (errorStr.contains('403') ||
+            errorStr.contains('401') ||
+            errorStr.contains('invalid_key') ||
+            errorStr.contains('invalid')) {
           _errorType = "AUTH_ERROR";
         } else {
           _errorType = "GENERAL";

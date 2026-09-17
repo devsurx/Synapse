@@ -2,8 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/openai_service.dart';
 
 class OCRScreen extends StatefulWidget {
   final Function(String) onNotesProcessed;
@@ -19,7 +19,6 @@ class _OCRScreenState extends State<OCRScreen> {
   final TextRecognizer _textRecognizer = TextRecognizer(
     script: TextRecognitionScript.latin,
   );
-  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
 
   Future<void> _processHandwriting(ImageSource source) async {
     final picker = ImagePicker();
@@ -45,18 +44,30 @@ class _OCRScreenState extends State<OCRScreen> {
 
       setState(() => _statusMessage = "AI Polishing text...");
 
-      // 2. AI Cleanup Step (Fixing OCR errors)
-      final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey);
+      // 2. AI Cleanup Step (Fixing OCR errors) via OpenAI
+      final apiKey = await OpenAIService.getApiKey();
+      if (apiKey.isEmpty) {
+        throw Exception("OpenAI API key missing. Add it in Settings.");
+      }
       final prompt =
           """
-      The following text was extracted from handwritten notes via OCR. 
-      It might have typos. Please fix the grammar, spelling, and format it into 
+      The following text was extracted from handwritten notes via OCR.
+      It might have typos. Please fix the grammar, spelling, and format it into
       clean, readable study notes.
       TEXT: ${recognizedText.text}
       """;
 
-      final response = await model.generateContent([Content.text(prompt)]);
-      final cleanedText = response.text ?? recognizedText.text;
+      String cleanedText;
+      try {
+        cleanedText = await OpenAIService.generateText(
+          prompt,
+          apiKey: apiKey,
+          systemInstruction:
+              'You clean up OCR text into polished, readable study notes.',
+        );
+      } catch (_) {
+        cleanedText = recognizedText.text;
+      }
 
       // 3. Save & Notify
       final prefs = await SharedPreferences.getInstance();

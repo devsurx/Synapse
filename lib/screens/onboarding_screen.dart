@@ -84,18 +84,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       "icon": "🗂️",
     },
     {
-      "title": "AI Tutor Chat",
-      "desc": "Chat with an AI briefed on your documents.",
-      "icon": "🤖",
-    },
-    {
       "title": "Image to Text",
       "desc": "Snap a photo of notes for AI analysis.",
       "icon": "📷",
     },
     {
       "title": "AI Activation",
-      "desc": "To enable these features, you'll need a free Gemini API key.",
+      "desc": "To enable these features, you'll need an OpenAI API key.",
       "icon": "🔑",
     },
   ];
@@ -116,7 +111,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _launchURL() async {
-    final Uri url = Uri.parse('https://aistudio.google.com/');
+    final Uri url = Uri.parse('https://platform.openai.com/api-keys');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       throw Exception('Could not launch $url');
     }
@@ -134,7 +129,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           style: TextStyle(color: Colors.white),
         ),
         content: const Text(
-          "Without a Gemini API key, the Planner, ELI5, and AI Chat features will not work. You can add it later in Settings, but your experience will be limited for now.",
+          "Without an OpenAI API key, the Planner, ELI5, and other AI labs will not work. You can add it later in Settings, but your experience will be limited for now.",
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -163,7 +158,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _proceedToApp() async {
     final prefs = await SharedPreferences.getInstance();
     if (_apiKeyController.text.isNotEmpty) {
-      await prefs.setString('gemini_api_key', _apiKeyController.text.trim());
+      await prefs.setString('openai_api_key', _apiKeyController.text.trim());
     }
     await prefs.setBool('is_first_time', false);
     if (!mounted) return;
@@ -344,12 +339,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 _instructionStep(
                   "1",
-                  "Go to aistudio.google.com",
+                  "Go to platform.openai.com/api-keys",
                   isLink: true,
                   onTap: _launchURL,
                 ),
-                _instructionStep("2", "Click 'Get API Key' in sidebar"),
-                _instructionStep("3", "Paste the key below"),
+                _instructionStep("2", "Click 'Create new secret key'"),
+                _instructionStep("3", "Paste the sk-... key below"),
               ],
             ),
           ),
@@ -359,7 +354,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             obscureText: true,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: "Paste AIza... key here",
+              hintText: "Paste sk-... key here",
               hintStyle: const TextStyle(color: Colors.white24),
               filled: true,
               fillColor: Colors.white.withOpacity(0.05),

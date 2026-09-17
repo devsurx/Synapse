@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Added for API key retrieval
 import 'dart:math' as math;
 import '../services/ad_widget.dart';
+import '../services/openai_service.dart';
 
 class Eli5LabScreen extends StatefulWidget {
   const Eli5LabScreen({super.key});
@@ -40,13 +39,12 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
     final input = _inputController.text.trim();
     if (input.isEmpty) return;
 
-    // --- UPDATED: GET API KEY FROM SHARED PREFERENCES ---
-    final prefs = await SharedPreferences.getInstance();
-    final userApiKey = prefs.getString('gemini_api_key') ?? "";
+    // --- UPDATED: GET OPENAI KEY FROM SHARED PREFERENCES ---
+    final userApiKey = await OpenAIService.getApiKey();
 
     if (userApiKey.isEmpty) {
       _showSnackBar(
-        "API Key missing! Please set it in Settings or Onboarding.",
+        "OpenAI API key missing! Please set it in Settings or Onboarding.",
       );
       return;
     }
@@ -58,28 +56,32 @@ class _Eli5LabScreenState extends State<Eli5LabScreen>
     });
 
     try {
-      // Use the user's provided key and the correct model identifier
-      final model = GenerativeModel(
-        model: 'models/gemma-3-27b-it', // Updated to a stable Gemini model name
-        apiKey: userApiKey,
-      );
-
       final prompt =
           "Explain the following like I'm 5 years old. Use a funny analogy: $input";
-      final response = await model.generateContent([Content.text(prompt)]);
+      final reply = await OpenAIService.generateText(
+        prompt,
+        apiKey: userApiKey,
+        systemInstruction:
+            'You simplify complex topics with funny, vivid analogies a 5-year-old can understand.',
+      );
 
       setState(() {
-        _simplifiedText = response.text ?? "The lab couldn't process this.";
+        _simplifiedText = reply.isNotEmpty
+            ? reply
+            : "The lab couldn't process this.";
         _isLoading = false;
       });
     } catch (e) {
       debugPrint("ELI5 ERROR: $e");
       setState(() {
         _isLoading = false;
-        // Check for specific API errors (429 is limit, 403 is invalid key)
-        if (e.toString().contains('429')) {
+        // Check for specific API errors (429 is limit, 401/403 is invalid key)
+        if (e.toString().contains('429') ||
+            e.toString().contains('LIMIT_REACHED')) {
           _errorType = "LIMIT";
-        } else if (e.toString().contains('403')) {
+        } else if (e.toString().contains('401') ||
+            e.toString().contains('403') ||
+            e.toString().contains('INVALID_KEY')) {
           _errorType = "AUTH";
         } else {
           _errorType = "GENERAL";

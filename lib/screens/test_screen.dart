@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import '../services/openai_service.dart';
 import 'home_page.dart'; // To use glassBox and ImmersiveWrapper
 
 class TestScreen extends StatefulWidget {
@@ -27,7 +26,7 @@ class _TestScreenState extends State<TestScreen> {
 
   Future<void> _generateTest() async {
     final prefs = await SharedPreferences.getInstance();
-    final apiKey = prefs.getString('gemini_api_key') ?? "";
+    final apiKey = await OpenAIService.getApiKey();
     final sourceText = prefs.getString('global_synced_pdf') ?? "";
 
     if (apiKey.isEmpty || sourceText.isEmpty) {
@@ -35,28 +34,30 @@ class _TestScreenState extends State<TestScreen> {
       return;
     }
 
-    final model = GenerativeModel(
-      model: 'gemini-2.5-flash-lite',
-      apiKey: apiKey,
-    );
-
     // Strict prompt for JSON output
     final prompt =
         """
     Analyze this text: $sourceText
-    Generate 10 multiple-choice questions for a test. 
-    Return ONLY a valid JSON array of objects with these keys: 
+    Generate 10 multiple-choice questions for a test.
+    Return ONLY a valid JSON array of objects with these keys:
     "question", "options" (array of 4 strings), "answer" (the correct string).
     """;
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
-      final cleanJson = response.text!
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
+      final decoded = await OpenAIService.generateJson(
+        prompt,
+        apiKey: apiKey,
+        systemInstruction:
+            'You generate exam questions. Always return valid JSON only.',
+        maxTokens: 3000,
+      );
+      final List<dynamic> questions = decoded is List
+          ? decoded
+          : (decoded is Map && decoded.values.whereType<List>().isNotEmpty
+                ? decoded.values.whereType<List>().first
+                : []);
       setState(() {
-        _questions = jsonDecode(cleanJson);
+        _questions = questions;
         _isLoading = false;
       });
     } catch (e) {

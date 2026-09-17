@@ -305,14 +305,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadKey() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(
-      () => _apiController.text = prefs.getString('gemini_api_key') ?? "",
-    );
+    // Prefer the new OpenAI key; fall back to legacy Gemini key with a hint.
+    final openAiKey = prefs.getString('openai_api_key') ?? "";
+    final legacyKey = prefs.getString('gemini_api_key') ?? "";
+    setState(() {
+      _apiController.text = openAiKey.isNotEmpty ? openAiKey : "";
+      if (openAiKey.isEmpty && legacyKey.isNotEmpty) {
+        // Leave the field empty so the user pastes an sk-... key,
+        // but the hint below will explain the migration.
+      }
+    });
   }
 
   Future<void> _saveKey() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('gemini_api_key', _apiController.text.trim());
+    await prefs.setString('openai_api_key', _apiController.text.trim());
     if (mounted) {
       HapticFeedback.mediumImpact();
       Navigator.pop(context);
@@ -330,7 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             // --- API INPUT SECTION ---
             const Text(
-              "AUTHENTICATION TOKEN",
+              "OPENAI AUTHENTICATION TOKEN",
               style: TextStyle(
                 color: Color(0xFF8DAA91),
                 fontSize: 10,
@@ -350,7 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontFamily: 'monospace',
                 ),
                 decoration: InputDecoration(
-                  hintText: "PASTE KEY HERE...",
+                  hintText: "PASTE sk-... KEY HERE...",
                   hintStyle: TextStyle(
                     color: Colors.white.withOpacity(0.1),
                     fontSize: 13,
@@ -389,17 +396,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   _instructionStep("01", "Navigate to "),
                   // Clickable Link Logic
-                  _linkStep("aistudio.google.com"),
+                  _linkStep("platform.openai.com/api-keys"),
                   const SizedBox(height: 16),
                   _instructionStep(
                     "02",
-                    "Sign in with a standard Google Account",
+                    "Sign in with your OpenAI account",
                   ),
                   _instructionStep(
                     "03",
-                    "Select 'Get API Key' from the sidebar",
+                    "Select 'Create new secret key'",
                   ),
-                  _instructionStep("04", "Generate a new project key"),
+                  _instructionStep(
+                    "04",
+                    "Paste the sk-... key above (powered by gpt-4o-mini)",
+                  ),
 
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16.0),
@@ -417,7 +427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "LEGAL: USER MUST BE 18+ TO OPERATE GEMINI API",
+                          "BILLING: OPENAI API USAGE IS PAY-PER-TOKEN — CHECK LIMITS",
                           style: TextStyle(
                             color: Colors.orangeAccent.withOpacity(0.8),
                             fontSize: 10,

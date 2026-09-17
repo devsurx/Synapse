@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import '../services/openai_service.dart';
 
 class QuizScreen extends StatefulWidget {
   final String? studyContext;
@@ -25,34 +24,42 @@ class _QuizScreenState extends State<QuizScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash-lite',
-        apiKey:
-            'AIzaSyCAnahv3xdlsl5Gc4lrxYYoCyR74tke2NI', // Use your actual key
-      );
+      final apiKey = await OpenAIService.getApiKey();
+      if (apiKey.isEmpty) {
+        throw Exception('INVALID_KEY');
+      }
 
       final prompt =
           """
 Generate a 5-question MCQ quiz BASED ONLY on the following text: ${widget.studyContext}
-DO NOT use outside knowledge. If the text is empty, return an error message in JSON.
-Format: JSON array [{question, options, answerIndex}]
+DO NOT use outside knowledge. If the text is empty, return an empty JSON array.
+Return ONLY a valid JSON array of objects with keys: "question", "options" (array of 4 strings), "answerIndex" (integer 0-3).
 """;
 
-      final response = await model.generateContent([Content.text(prompt)]);
-      final String cleanJson = response.text!
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
+      final decoded = await OpenAIService.generateJson(
+        prompt,
+        apiKey: apiKey,
+        systemInstruction:
+            'You generate MCQ quizzes. Always return valid JSON only.',
+      );
+
+      final List<dynamic> questions = decoded is List
+          ? decoded
+          : (decoded is Map && decoded.values.whereType<List>().isNotEmpty
+                ? decoded.values.whereType<List>().first
+                : []);
 
       setState(() {
-        _questions = jsonDecode(cleanJson);
+        _questions = questions;
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("AI failed to build the quiz.")),
-      );
+      if (!mounted) return;
+      final msg = e.toString().contains('INVALID_KEY')
+          ? "OpenAI API key missing. Add it in Settings."
+          : "AI failed to build the quiz.";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
